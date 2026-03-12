@@ -1,0 +1,16 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Build Release (Executables)",
+            "type": "npm",
+            "script": "make",
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "problemMatcher": [],
+            "detail": "Runs electron-forge make to generate production executables in the 'out/' directory."
+        }
+    ]
+}
