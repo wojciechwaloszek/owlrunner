@@ -939,8 +939,10 @@ function updateLoadButtonState() {
   loadBtn.disabled = !localStorage.getItem(key);
 }
 
+// Slot select change event handler
 slotSelect.addEventListener('change', updateLoadButtonState);
 
+// Save button event handler
 saveBtn.addEventListener('click', () => {
   // Prepare the state to save
   const selectedSlot = slotSelect.value;
@@ -970,7 +972,15 @@ saveBtn.addEventListener('click', () => {
   updateSlotSelectUI();
 });
 
+// Load button event handler
 loadBtn.addEventListener('click', () => {
+  // Check if the current state is saved in any slot
+  if (!isCurrentStateSaved()) {
+    if (!confirm("The graph contains unsaved changes. Do you want to continue?")) {
+      return;
+    }
+  }
+
   const selectedSlot = slotSelect.value;
   const key = `${SLOT_KEY_PREFIX}${selectedSlot}`;
   const savedDataStr = localStorage.getItem(key);
@@ -999,27 +1009,35 @@ loadBtn.addEventListener('click', () => {
   }
 });
 
+// This function checks if the currents state is saved in ANY slot
+function isCurrentStateSaved(): boolean {
+  for (let i = 1; i <= 12; i++) {
+    const key = `${SLOT_KEY_PREFIX}${i}`;
+    const savedDataStr = localStorage.getItem(key);
+    if (savedDataStr) {
+      const savedData = JSON.parse(savedDataStr);
+      let savedUndoStack = savedData.undoStack || [];
+      if (undoStack.at(-1) === savedUndoStack.at(-1)) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
 var isClosing = false;
 
 // On app exit (window close) check if graph saved
 window.addEventListener('beforeunload', (event) => {
   if (undoStack.length > 0 && !isClosing) {
-    const selectedSlot = slotSelect.value;
-    const key = `${SLOT_KEY_PREFIX}${selectedSlot}`;
-
-    const savedDataStr = localStorage.getItem(key);
-    if (savedDataStr) {
-      const savedData = JSON.parse(savedDataStr);
-      let savedUndoStack = savedData.undoStack || [];
-      if (undoStack.at(-1) !== savedUndoStack.at(-1)) {
-        event.preventDefault();
-        window.setTimeout(() => {
-          if (confirm("The graph contains unsaved changes. Do you want to continue?")) {
-            isClosing = true;
-            window.close();
-          }
-        }, 50);
-      }
+    if (!isCurrentStateSaved()) {
+      event.preventDefault();
+      window.setTimeout(() => {
+        if (confirm("The graph contains unsaved changes. Do you want to continue?")) {
+          isClosing = true;
+          window.close();
+        }
+      }, 50);
     }
   }
 });
