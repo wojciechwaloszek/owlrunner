@@ -198,6 +198,7 @@ cy.on('freeon', function (event) {
     // Snap the child into the new parent
     node.move({ parent: bestParent.id() });
     applyOWLCompoundLayout();
+    captureGraphState();
   } else {
     // If node is not a class and not close enough to any parent, snap back to original position and parent
     if (!node.is('.class-node')) {
@@ -206,6 +207,7 @@ cy.on('freeon', function (event) {
     } else {
       // else just snap out (apply layout)
       applyOWLCompoundLayout();
+      captureGraphState();
     }
   }
   // Optional: Reset the scratch data
@@ -940,6 +942,7 @@ function updateLoadButtonState() {
 slotSelect.addEventListener('change', updateLoadButtonState);
 
 saveBtn.addEventListener('click', () => {
+  // Prepare the state to save
   const selectedSlot = slotSelect.value;
   const key = `${SLOT_KEY_PREFIX}${selectedSlot}`;
 
@@ -949,6 +952,20 @@ saveBtn.addEventListener('click', () => {
     nodeCount
   };
 
+  // Check if our undo stack contains the same state as the last saved state (small change?)
+  const savedDataStr = localStorage.getItem(key);
+  if (savedDataStr) {
+    const savedData = JSON.parse(savedDataStr);
+    let savedUndoStack = savedData.undoStack || [];
+    if (!undoStack.includes(savedUndoStack.at(-1))) {
+      // Not a small change - display a confirm dialog to overwrite the slot
+      if (!confirm("This slot contains a different graph. Do you want to overwrite it?")) {
+        return
+      }
+    }
+  }
+
+  // Save the state to the slot
   localStorage.setItem(key, JSON.stringify(stateToSave));
   updateSlotSelectUI();
 });
