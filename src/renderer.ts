@@ -999,6 +999,31 @@ loadBtn.addEventListener('click', () => {
   }
 });
 
+var isClosing = false;
+
+// On app exit (window close) check if graph saved
+window.addEventListener('beforeunload', (event) => {
+  if (undoStack.length > 0 && !isClosing) {
+    const selectedSlot = slotSelect.value;
+    const key = `${SLOT_KEY_PREFIX}${selectedSlot}`;
+
+    const savedDataStr = localStorage.getItem(key);
+    if (savedDataStr) {
+      const savedData = JSON.parse(savedDataStr);
+      let savedUndoStack = savedData.undoStack || [];
+      if (undoStack.at(-1) !== savedUndoStack.at(-1)) {
+        event.preventDefault();
+        window.setTimeout(() => {
+          if (confirm("The graph contains unsaved changes. Do you want to continue?")) {
+            isClosing = true;
+            window.close();
+          }
+        }, 50);
+      }
+    }
+  }
+});
+
 // Initialize the dropdown labels based on existing local storage data
 updateSlotSelectUI();
 
