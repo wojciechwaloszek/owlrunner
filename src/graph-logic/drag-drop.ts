@@ -60,7 +60,7 @@ export function applyDragDropLogic(cy: cytoscape.Core,
 
             if (insideBySnap) {
                 // make it the best parent unless it's an ancestor of the current best parent
-                if (bestParent && !bestParent.ancestors().contains(parent)) {
+                if (bestParent && !bestParent.descendants().contains(parent)) {
                     return;
                 }
                 bestParent = parent;
@@ -73,7 +73,7 @@ export function applyDragDropLogic(cy: cytoscape.Core,
             notifyNodeMoved(node, bestParent);
         } else {
             // If node is not a class and not close enough to any parent, snap back to original position and parent
-            if (!node.is('.class-node')) {
+            if (!node.is(options?.eligibleParentSelector || 'node')) {
                 node.position({ x: oldPositionX, y: oldPositionY });
                 setTimeout(() => node.move({ parent: oldParentId }), 20);
             } else {

@@ -153,7 +153,7 @@ const cy = cytoscape({
 
 // Apply drag and drop logic to the graph
 applyDragDropLogic(cy, {
-  eligibleParentSelector: 'class-node',
+  eligibleParentSelector: '.class-node',
   eligibleChildSelector: 'node:child'
 }, () => {
   applyOWLCompoundLayout(cy); captureGraphState();
