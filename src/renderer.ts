@@ -702,6 +702,7 @@ redoBtn.addEventListener('click', () => {
 // --- SAVE / LOAD SYSTEM ---
 // --------------------------------------------------------------------------------------------------
 
+// Update slot select UI combo box
 function updateSlotSelectUI() {
   for (let i = 1; i <= MAX_SLOTS; i++) {
     const option = slotSelect.querySelector(`option[value="${i}"]`) as HTMLOptionElement;
