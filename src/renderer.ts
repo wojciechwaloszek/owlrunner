@@ -636,7 +636,7 @@ const SLOT_KEY_PREFIX = 'owlRunner_slot_';
 const MAX_SLOTS = 12;
 
 let isRestoring = false;
-let undoRedo = new SaveLoad(MAX_HISTORY, SLOT_KEY_PREFIX);
+let undoRedo = new SaveLoad(MAX_HISTORY, JSON.stringify(cy.json()), SLOT_KEY_PREFIX, MAX_SLOTS);
 
 function updateUndoRedoButtons() {
   undoBtn.disabled = !undoRedo.hasUndos();

@@ -12,10 +12,12 @@ import { UndoRedo, MAX_HISTORY } from "./undo-redo";
 export class SaveLoad extends UndoRedo {
     private slotPrefix: string;
     private maxSlots: number;
+    private initialState: string;
 
     // constructor
-    constructor(maxHistory: number = MAX_HISTORY, slotPrefix: string, maxSlots: number = 12) {
+    constructor(maxHistory: number = MAX_HISTORY, initialState: string, slotPrefix: string, maxSlots: number = 12) {
         super(maxHistory);
+        this.initialState = initialState;
         this.slotPrefix = slotPrefix;
         this.maxSlots = maxSlots;
     }
@@ -74,6 +76,9 @@ export class SaveLoad extends UndoRedo {
 
     // This function checks if the currents state is saved in ANY slot
     public isCurrentStateSaved(): boolean {
+        if (this.undoStack.at(-1) === this.initialState) {
+            return true;
+        }
         for (let i = 1; i <= this.maxSlots; i++) {
             const key = this.getKeyForSlot(i);
             const savedDataStr = localStorage.getItem(key);
