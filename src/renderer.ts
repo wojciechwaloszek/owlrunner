@@ -1,5 +1,13 @@
 import cytoscape, { NodeCollection, NodeSingular } from 'cytoscape';
 
+import { exportToOWL } from './owl-graph-logic/export-owl';
+import { applyOWLCompoundLayout } from './owl-graph-logic/graph-layout';
+import { applyDragDropLogic } from './graph-logic/drag-drop';
+import { SaveLoad } from './basic-logic/save-load';
+import { SlotManager } from './components/slot-manager';
+import { OntologyMetadata } from './components/ontology-metadata';
+import { DocumentationTable } from './components/documentation-table';
+
 // Initial setup for Cytoscape instance
 const cy = cytoscape({
   container: document.getElementById('cy'), // container to render in
@@ -140,85 +148,18 @@ const cy = cytoscape({
 });
 
 // --------------------------------------------------------------------------------------------------
-// --- DRAG&DROP LOGIC ---
-// --------------------------------------------------------------------------------------------------
-
-const DROP_SNAP_THRESHOLD = 20;
-
-// Listen to the 'grab' event on any child node
-cy.on('grabon', 'node:child', function (event) {
-  const node = event.target;
-  const oldParentId = node.parent().id();
-
-  // Optional: Save the old parent ID and position in case you want to snap it back later
-  node.scratch('oldParent', oldParentId);
-  node.scratch('oldPositionX', node.position().x);
-  node.scratch('oldPositionY', node.position().y);
-
-  // Pop the child out by setting its parent to null
-  node.move({ parent: null });
-});
-
-cy.on('freeon', function (event) {
-  const node = event.target;
-  const oldParentId = node.scratch('oldParent');
-  const oldPositionX = node.scratch('oldPositionX');
-  const oldPositionY = node.scratch('oldPositionY');
-
-  // Check if the node is close to any potential parent
-  const potentialParents = cy.nodes('.class-node');
-  let bestParent: NodeSingular | null = null;
-
-  potentialParents.forEach(parent => {
-    // Skip self
-    if (parent.id() === node.id()) return;
-
-    // Read parent bounding box
-    const parentBoundingBox = parent.boundingBox();
-
-    // Define a threshold distance for snapping (you can tune this value)
-    const snapThreshold = DROP_SNAP_THRESHOLD;
-
-    // Check if our node's position is within the bounding box extended by snap threshold
-    const insideBySnap = node.position().x >= parentBoundingBox.x1 - snapThreshold &&
-      node.position().x <= parentBoundingBox.x2 + snapThreshold &&
-      node.position().y >= parentBoundingBox.y1 - snapThreshold &&
-      node.position().y <= parentBoundingBox.y2 + snapThreshold;
-
-    if (insideBySnap) {
-      // make it the best parent unless it's an ancestor of the current best parent
-      if (bestParent && !bestParent.ancestors().contains(parent)) {
-        return;
-      }
-      bestParent = parent;
-    }
-  });
-
-  if (bestParent) {
-    // Snap the child into the new parent
-    node.move({ parent: bestParent.id() });
-    applyOWLCompoundLayout();
-    captureGraphState();
-  } else {
-    // If node is not a class and not close enough to any parent, snap back to original position and parent
-    if (!node.is('.class-node')) {
-      node.position({ x: oldPositionX, y: oldPositionY });
-      setTimeout(() => node.move({ parent: oldParentId }), 20);
-    } else {
-      // else just snap out (apply layout)
-      applyOWLCompoundLayout();
-      captureGraphState();
-    }
-  }
-  // Optional: Reset the scratch data
-  node.removeScratch('oldParent');
-  node.removeScratch('oldPosition');
-});
-
-
-// --------------------------------------------------------------------------------------------------
 // --- INITIALIZATION ---
 // --------------------------------------------------------------------------------------------------
+
+// Apply drag and drop logic to the graph
+applyDragDropLogic(cy, {
+  eligibleParentSelector: 'class-node',
+  eligibleChildSelector: 'node:child'
+}, () => {
+  applyOWLCompoundLayout(cy); captureGraphState();
+}, (node) => {
+  applyOWLCompoundLayout(cy); captureGraphState();
+});
 
 // State Management
 let edgeModeActive = false;
@@ -234,6 +175,7 @@ const selectionInfo = document.getElementById('selection-info') as HTMLParagraph
 const slotSelect = document.getElementById('slot-select') as HTMLSelectElement;
 const saveBtn = document.getElementById('save-btn') as HTMLButtonElement;
 const loadBtn = document.getElementById('load-btn') as HTMLButtonElement;
+const exportBtn = document.getElementById('export-owl-btn') as HTMLButtonElement;
 
 // Nav Tab switching
 const navBtns = document.querySelectorAll('.nav-btn');
@@ -253,11 +195,11 @@ navBtns.forEach(btn => {
         container.classList.add('active');
         // Render slots when switching to slot manager
         if (targetId === 'view-slots') {
-          renderSlotManager();
+          slotManager.refresh();
         } else if (targetId === 'view-documentation') {
-          renderDocumentationTable();
+          documentationTable.refresh();
         } else if (targetId === 'view-ontology') {
-          renderOntologyMetadata();
+          ontologyMetadata.refresh();
         }
       } else {
         container.classList.remove('active');
@@ -266,13 +208,16 @@ navBtns.forEach(btn => {
   });
 });
 
+// Initial layout execution
+applyOWLCompoundLayout(cy);
+
 // --------------------------------------------------------------------------------------------------
 // --- BASIC BUTTONS ---
 // --------------------------------------------------------------------------------------------------
 
 // Layout Buttons
 document.getElementById('layout-btn')?.addEventListener('click', () => {
-  applyOWLCompoundLayout();
+  applyOWLCompoundLayout(cy);
   updateHoverButtons();
   captureGraphState();
 });
@@ -293,7 +238,7 @@ addNodeBtn.addEventListener('click', () => {
     classes: 'class-node'
   });
 
-  applyOWLCompoundLayout();
+  applyOWLCompoundLayout(cy);
   captureGraphState();
 });
 
@@ -304,7 +249,7 @@ clearBtn.addEventListener('click', () => {
     nodeCount = 0;
     cancelEdgeMode();
     updateSelectionInfo();
-    applyOWLCompoundLayout();
+    applyOWLCompoundLayout(cy);
     updateHoverButtons();
     captureGraphState();
   }
@@ -338,12 +283,14 @@ document.addEventListener('keydown', (e) => {
     if (selected.length > 0) {
       selected.remove();
       updateSelectionInfo();
-      applyOWLCompoundLayout();
+      applyOWLCompoundLayout(cy);
       updateHoverButtons();
       captureGraphState();
     }
   }
 });
+
+exportBtn.addEventListener('click', () => exportToOWL(cy));
 
 // --------------------------------------------------------------------------------------------------
 // --- OVERLAY BUTTONS LOGIC ---
@@ -398,7 +345,7 @@ function handleAddElement(parentId: string, type: string) {
     classes: newClass
   });
 
-  applyOWLCompoundLayout();
+  applyOWLCompoundLayout(cy);
   captureGraphState();
 
   if (activeHoverNodeId === parentId) {
@@ -602,7 +549,10 @@ cy.on('select unselect', 'node, edge', updateSelectionInfo);
 // Initialize info
 updateSelectionInfo();
 
+// --------------------------------------------------------------------------------------------------
 // --- INLINE RENAMING ---
+// --------------------------------------------------------------------------------------------------
+
 // Double click to rename nodes inline
 cy.on('dblclick', 'node', (evt) => {
   const node = evt.target;
@@ -658,7 +608,7 @@ cy.on('dblclick', 'node', (evt) => {
     if (newLabel && newLabel !== currentLabel) {
       node.data('label', newLabel);
       // Recompute exact geometric bounds because label size affects spacing
-      applyOWLCompoundLayout();
+      applyOWLCompoundLayout(cy);
       if (activeHoverNodeId === node.id()) updateHoverButtons();
       captureGraphState();
     }
@@ -678,185 +628,26 @@ cy.on('dblclick', 'node', (evt) => {
 });
 
 // --------------------------------------------------------------------------------------------------
-// --- CUSTOM RECURSIVE COMPOUND LAYOUT ---
-// --------------------------------------------------------------------------------------------------
-
-function getLabelWidth(node: cytoscape.NodeSingular): number {
-  const label = node.data('label') || '';
-  return Math.max(120, label.length * 10);
-}
-
-function getLabelHeight(node: cytoscape.NodeSingular): number {
-  return 20;
-}
-
-// places anchors around the estimated label-box so the node won't resize itself to be smaller
-function anchorClass(node: cytoscape.NodeSingular) {
-  const id = node.id();
-  const anchorId = `anchor_${id}`;
-  let anchor = cy.getElementById(anchorId);
-  if (anchor.empty()) {
-    cy.add({ group: 'nodes', data: { id: anchorId, parent: id }, classes: 'anchor-node' });
-    anchor = cy.getElementById(anchorId);
-  }
-  const anchor2Id = `anchor_br_${node.id()}`;
-  let anchor2 = cy.getElementById(anchor2Id);
-  if (anchor2.empty()) {
-    cy.add({ group: 'nodes', data: { id: anchor2Id, parent: node.id() }, classes: 'anchor-node' });
-    anchor2 = cy.getElementById(anchor2Id);
-  }
-  /*const labelWidthEstimate = getLabelWidth(node);
-  const labelHeightEstimate = getLabelHeight(node);
-  anchor.relativePosition({ x: 0, y: 0 });
-  anchor2.relativePosition({ x: labelWidthEstimate, y: labelHeightEstimate });*/
-}
-
-function applyOWLCompoundLayout() {
-  // We need to calculate bounds explicitly
-
-  // Get all root class nodes
-  const rootClasses = cy.nodes('.class-node').orphans();
-
-  // Settings
-  const PADDING = 20;
-
-  // Recursive function to layout a class and return its calculated dimensions {w, h, x, y}
-  function layoutClass(node: cytoscape.NodeSingular, startX?: number, startY?: number): { w: number, h: number } {
-
-    // Get the children of the class, collate them upmost to downmost
-    const objectAttrs = node.children('.attr-obj').sort((a, b) => a.boundingBox().y1 - b.boundingBox().y1);
-    const stringAttrs = node.children('.attr-str').sort((a, b) => a.boundingBox().y1 - b.boundingBox().y1);
-    const subclasses = node.children('.class-node').sort((a, b) => a.boundingBox().y1 - b.boundingBox().y1);
-    // collAttrs should be sorted by leftmost to rightmost
-    const collAttrs = node.children('.attr-col').sort((a, b) => a.boundingBox().x1 - b.boundingBox().x1);
-
-    anchorClass(node);
-
-    const dims = { w: 0, h: 0 };
-
-    let sx = startX !== undefined ? startX : node.boundingBox().x1;
-    let sy = startY !== undefined ? startY : node.boundingBox().y1;
-
-    sx += 8.5;
-    sy += 10.5;
-
-    // 1. First row - label only
-    const currentY = sy + PADDING + getLabelHeight(node);
-
-    // Initial widths for columns
-    let leftW = 0; objectAttrs.forEach(n => { leftW = Math.max(leftW, n.outerWidth()); });
-    let rightW = 0; stringAttrs.forEach(n => { rightW = Math.max(rightW, n.outerWidth()); });
-
-    // Position Second Row
-    const leftX = sx;
-    const midX = sx + leftW + (leftW > 0 ? PADDING : 0);
-
-    // Subclasses
-    let midW = 0;
-    let midH = 0;
-    let subY = currentY;
-    subclasses.forEach(sub => {
-      const subDims = layoutClass(sub, midX, subY);
-      midW = Math.max(midW, subDims.w);
-      subY += subDims.h + 1.5 * PADDING;
-      midH += subDims.h + 1.5 * PADDING;
-    });
-    if (subclasses.length > 0) midH -= PADDING;
-
-    // Calculate row 3 width
-    let row3W = 0;
-    collAttrs.forEach(child => { row3W += child.outerWidth() + PADDING; });
-    if (collAttrs.length > 0) row3W -= PADDING;
-
-    // Calculate natural row 2 width
-    const naturalRightX = midX + midW + ((midW > 0 || leftW > 0) && stringAttrs.length > 0 ? PADDING : 0);
-    const naturalRow2W = (stringAttrs.length > 0) ? (naturalRightX + rightW - sx) : (naturalRightX - sx);
-
-    // Node bounds
-    dims.w = Math.max(getLabelWidth(node), row3W, naturalRow2W);
-    const rightEdge = sx + dims.w;
-
-    // Object attrs
-    let leftY = currentY;
-    let leftH = 0;
-    objectAttrs.forEach(child => {
-      // position is center
-      child.position({ x: leftX + child.outerWidth() / 2, y: leftY + child.outerHeight() / 2 });
-      leftY += child.outerHeight() + PADDING;
-      leftH += child.outerHeight() + PADDING;
-    });
-    if (objectAttrs.length > 0) leftH -= PADDING;
-
-    // String attrs (right-edge aligned)
-    let rightY = currentY;
-    let rightH = 0;
-    stringAttrs.forEach(child => {
-      child.position({ x: rightEdge - child.outerWidth() / 2, y: rightY + child.outerHeight() / 2 });
-      rightY += child.outerHeight() + PADDING;
-      rightH += child.outerHeight() + PADDING;
-    });
-    if (stringAttrs.length > 0) rightH -= PADDING;
-
-    const row2H = Math.max(leftH, midH, rightH);
-
-    // Collective attrs
-    const row3Y = currentY + row2H + (row2H > 0 && collAttrs.length > 0 ? PADDING : 0);
-    // Center the collective attributes horizontally
-    const row3StartX = sx + (dims.w - row3W) / 2;
-    let row3X = row3StartX;
-    let row3H = 0;
-    collAttrs.forEach(child => {
-      child.position({ x: row3X + child.outerWidth() / 2, y: row3Y + child.outerHeight() / 2 });
-      row3X += child.outerWidth() + PADDING;
-      row3H = Math.max(row3H, child.outerHeight());
-    });
-
-    dims.h = (row3Y + row3H - sy);
-
-    const id = node.id();
-    const anchor1 = cy.getElementById(`anchor_${id}`);
-    const anchor2 = cy.getElementById(`anchor_br_${id}`);
-    if (!anchor1.empty()) anchor1.position({ x: sx, y: sy });
-    if (!anchor2.empty()) anchor2.position({ x: sx + dims.w, y: sy + dims.h });
-
-    return dims;
-  }
-
-  // Layout all root classes
-  rootClasses.forEach(root => {
-    //const dims = layoutClass(root, 0, currentRootY);
-    const dims = layoutClass(root);
-  });
-
-}
-
-// Initial layout execution
-applyOWLCompoundLayout();
-
-// --------------------------------------------------------------------------------------------------
 // --- UNDO / REDO SYSTEM ---
 // --------------------------------------------------------------------------------------------------
 
 const MAX_HISTORY = 20;
-let undoStack: string[] = [];
-let redoStack: string[] = [];
+const SLOT_KEY_PREFIX = 'owlRunner_slot_';
+const MAX_SLOTS = 12;
+
 let isRestoring = false;
+let undoRedo = new SaveLoad(MAX_HISTORY, SLOT_KEY_PREFIX);
 
 function updateUndoRedoButtons() {
-  undoBtn.disabled = undoStack.length === 0;
-  redoBtn.disabled = redoStack.length === 0;
+  undoBtn.disabled = !undoRedo.hasUndos();
+  redoBtn.disabled = !undoRedo.hasRedos();
 }
 
 function captureGraphState() {
   if (isRestoring) return;
   // Save the full cytoscape JSON state as a string (includes positions, data, classes)
   const stateStr = JSON.stringify(cy.json());
-  undoStack.push(stateStr);
-  if (undoStack.length > MAX_HISTORY) {
-    undoStack.shift();
-  }
-  // Any new action clears the redo stack
-  redoStack = [];
+  undoRedo.captureState(stateStr);
   updateUndoRedoButtons();
 }
 
@@ -881,7 +672,7 @@ function restoreState(stateStr: string) {
     cy.data('ontologyDoc', '');
   }
 
-  renderOntologyMetadata();
+  ontologyMetadata.refresh();
 
   updateSelectionInfo();
   updateHoverButtons();
@@ -893,20 +684,15 @@ function restoreState(stateStr: string) {
 captureGraphState();
 
 undoBtn.addEventListener('click', () => {
-  if (undoStack.length > 0) {
-    // Current state needs to be saved to redo stack before we load the previous state
-    //redoStack.push(JSON.stringify(cy.json()));
-    redoStack.push(undoStack.pop()!);
-    const prevState = undoStack.at(-1)!;
+  const prevState = undoRedo.undo();
+  if (prevState) {
     restoreState(prevState);
   }
 });
 
 redoBtn.addEventListener('click', () => {
-  if (redoStack.length > 0) {
-    // Before we redo, we save the current state to the undo stack
-    undoStack.push(redoStack.pop()!);
-    const nextState = undoStack.at(-1)!;
+  const nextState = undoRedo.redo();
+  if (nextState) {
     restoreState(nextState);
   }
 });
@@ -916,14 +702,11 @@ redoBtn.addEventListener('click', () => {
 // --- SAVE / LOAD SYSTEM ---
 // --------------------------------------------------------------------------------------------------
 
-const SLOT_KEY_PREFIX = 'owlRunner_slot_';
-
 function updateSlotSelectUI() {
-  for (let i = 1; i <= 12; i++) {
-    const key = `${SLOT_KEY_PREFIX}${i}`;
+  for (let i = 1; i <= MAX_SLOTS; i++) {
     const option = slotSelect.querySelector(`option[value="${i}"]`) as HTMLOptionElement;
     if (option) {
-      if (localStorage.getItem(key)) {
+      if (undoRedo.isSlotOccupied(i)) {
         option.textContent = `Slot ${i} (Saved)`;
       } else {
         option.textContent = `Slot ${i} (Empty)`;
@@ -933,10 +716,10 @@ function updateSlotSelectUI() {
   updateLoadButtonState();
 }
 
+// Update load button state
 function updateLoadButtonState() {
-  const selectedSlot = slotSelect.value;
-  const key = `${SLOT_KEY_PREFIX}${selectedSlot}`;
-  loadBtn.disabled = !localStorage.getItem(key);
+  const selectedSlot = parseInt(slotSelect.value);
+  loadBtn.disabled = !undoRedo.isSlotOccupied(selectedSlot);
 }
 
 // Slot select change event handler
@@ -945,92 +728,49 @@ slotSelect.addEventListener('change', updateLoadButtonState);
 // Save button event handler
 saveBtn.addEventListener('click', () => {
   // Prepare the state to save
-  const selectedSlot = slotSelect.value;
-  const key = `${SLOT_KEY_PREFIX}${selectedSlot}`;
-
-  const stateToSave = {
-    undoStack,
-    redoStack,
-    nodeCount
-  };
+  const selectedSlot = parseInt(slotSelect.value);
 
   // Check if our undo stack contains the same state as the last saved state (small change?)
-  const savedDataStr = localStorage.getItem(key);
-  if (savedDataStr) {
-    const savedData = JSON.parse(savedDataStr);
-    let savedUndoStack = savedData.undoStack || [];
-    if (!undoStack.includes(savedUndoStack.at(-1))) {
-      // Not a small change - display a confirm dialog to overwrite the slot
-      if (!confirm("This slot contains a different graph. Do you want to overwrite it?")) {
-        return
-      }
+  if (!undoRedo.isSmallChange(selectedSlot)) {
+    // Not a small change - display a confirm dialog to overwrite the slot
+    if (!confirm("This slot contains a different graph. Do you want to overwrite it?")) {
+      return
     }
   }
 
   // Save the state to the slot
-  localStorage.setItem(key, JSON.stringify(stateToSave));
+  undoRedo.saveState(selectedSlot, { nodeCount });
   updateSlotSelectUI();
 });
 
 // Load button event handler
 loadBtn.addEventListener('click', () => {
   // Check if the current state is saved in any slot
-  if (!isCurrentStateSaved()) {
+  if (!undoRedo.isCurrentStateSaved()) {
     if (!confirm("The graph contains unsaved changes. Do you want to continue?")) {
       return;
     }
   }
 
-  const selectedSlot = slotSelect.value;
-  const key = `${SLOT_KEY_PREFIX}${selectedSlot}`;
-  const savedDataStr = localStorage.getItem(key);
-
-  if (savedDataStr) {
-    try {
-      const savedData = JSON.parse(savedDataStr);
-      undoStack = savedData.undoStack || [];
-      redoStack = savedData.redoStack || [];
-      nodeCount = typeof savedData.nodeCount === 'number' ? savedData.nodeCount : 0;
-
-      if (undoStack.length > 0) {
-        restoreState(undoStack.at(-1)!);
-        applyOWLCompoundLayout();
-      } else {
-        cy.elements().remove();
-        nodeCount = 0;
-        updateSelectionInfo();
-        updateHoverButtons();
-      }
-      updateUndoRedoButtons();
-    } catch (e) {
-      console.error("Failed to load graph state", e);
-      alert("Failed to load saved graph from this slot.");
+  try {
+    let metadata = { nodeCount: 0 };
+    if (undoRedo.loadState(parseInt(slotSelect.value), metadata)) {
+      nodeCount = typeof metadata.nodeCount === 'number' ? metadata.nodeCount : 0;
+      restoreState(undoRedo.getState()!);
+      applyOWLCompoundLayout(cy);
     }
+  } catch (e) {
+    console.error("Failed to load graph state", e);
+    alert("Failed to load saved graph from this slot.");
   }
 });
-
-// This function checks if the currents state is saved in ANY slot
-function isCurrentStateSaved(): boolean {
-  for (let i = 1; i <= 12; i++) {
-    const key = `${SLOT_KEY_PREFIX}${i}`;
-    const savedDataStr = localStorage.getItem(key);
-    if (savedDataStr) {
-      const savedData = JSON.parse(savedDataStr);
-      let savedUndoStack = savedData.undoStack || [];
-      if (undoStack.at(-1) === savedUndoStack.at(-1)) {
-        return true;
-      }
-    }
-  }
-  return false;
-}
 
 var isClosing = false;
 
 // On app exit (window close) check if graph saved
 window.addEventListener('beforeunload', (event) => {
-  if (undoStack.length > 0 && !isClosing) {
-    if (!isCurrentStateSaved()) {
+  if (undoRedo.hasUndos() && !isClosing) {
+    if (!undoRedo.isCurrentStateSaved()) {
       event.preventDefault();
       window.setTimeout(() => {
         if (confirm("The graph contains unsaved changes. Do you want to continue?")) {
@@ -1046,379 +786,19 @@ window.addEventListener('beforeunload', (event) => {
 updateSlotSelectUI();
 
 // --------------------------------------------------------------------------------------------------
-// --- SLOT MANAGER ---
+// --- COMPONENTS: SLOT MANAGER ---
 // --------------------------------------------------------------------------------------------------
 
-function getSlotSize(key: string): string {
-  const item = localStorage.getItem(key);
-  if (!item) return '0 KB';
-  const bytes = new Blob([item]).size;
-  if (bytes < 1024) return bytes + ' Bytes';
-  return (bytes / 1024).toFixed(2) + ' KB';
-}
+// Slot manager
+const slotManager = new SlotManager(undoRedo, updateSlotSelectUI);
+slotManager.init();
 
-function formatDate(timestamp?: string): string {
-  if (!timestamp) return 'Unknown Date';
-  const date = new Date(timestamp);
-  return date.toLocaleString();
-}
+// Ontology metadata
+const ontologyMetadata = new OntologyMetadata(cy, captureGraphState);
+ontologyMetadata.init();
 
-function renderSlotManager() {
-  const grid = document.getElementById('slot-grid');
-  if (!grid) return;
+// Documentation table
+const documentationTable = new DocumentationTable(cy, captureGraphState);
+documentationTable.init();
 
-  grid.innerHTML = ''; // Clear existing
-
-  for (let i = 1; i <= 12; i++) {
-    const key = `${SLOT_KEY_PREFIX}${i}`;
-    const dataStr = localStorage.getItem(key);
-    const isSaved = !!dataStr;
-
-    let infoHtml = '';
-    let actionsHtml = '';
-
-    if (isSaved) {
-      try {
-        const parsed = JSON.parse(dataStr);
-        // Optional timestamp: We didn't save timestamp initially, but we can display a generic message or file size
-        const sizeStr = getSlotSize(key);
-        infoHtml = `<p>Nodes: ${parsed.nodeCount || 0}</p><p>Size: ${sizeStr}</p>`;
-
-        actionsHtml = `
-          <button class="danger-btn" onclick="deleteSlot(${i})">Delete</button>
-          <button class="primary-btn" onclick="exportSlot(${i})">Export JSON</button>
-        `;
-      } catch (e) {
-        infoHtml = `<p>Error reading slot data</p>`;
-        actionsHtml = `<button class="danger-btn" onclick="deleteSlot(${i})">Delete</button>`;
-      }
-    } else {
-      infoHtml = `<p>No data saved</p>`;
-      actionsHtml = `
-        <button class="secondary-btn" style="grid-column: 1 / -1;" onclick="triggerImport(${i})">Import from JSON</button>
-      `;
-    }
-
-    const cardHtml = `
-      <div class="slot-card">
-        <div class="slot-header">
-          <span class="slot-title">Slot ${i}</span>
-          <span class="slot-status ${isSaved ? 'saved' : 'empty'}">${isSaved ? 'Saved' : 'Empty'}</span>
-        </div>
-        <div class="slot-info">
-          ${infoHtml}
-        </div>
-        <div class="slot-actions ${isSaved ? '' : 'empty-slot'}">
-          ${actionsHtml}
-        </div>
-      </div>
-    `;
-
-    grid.insertAdjacentHTML('beforeend', cardHtml);
-  }
-}
-
-// Global functions attached to window so the inline onclick handlers work
-(window as any).deleteSlot = (slotIndex: number) => {
-  if (confirm(`Are you sure you want to delete Slot ${slotIndex}?`)) {
-    const key = `${SLOT_KEY_PREFIX}${slotIndex}`;
-    localStorage.removeItem(key);
-    renderSlotManager();
-    updateSlotSelectUI(); // Keep editor dropdown in sync
-  }
-};
-
-(window as any).exportSlot = (slotIndex: number) => {
-  const key = `${SLOT_KEY_PREFIX}${slotIndex}`;
-  const dataStr = localStorage.getItem(key);
-  if (!dataStr) return;
-
-  const blob = new Blob([dataStr], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `owlrunner_slot_${slotIndex}_save.json`;
-  a.click();
-  URL.revokeObjectURL(url);
-};
-
-let activeImportSlot = -1;
-const importInput = document.getElementById('import-json-input') as HTMLInputElement;
-
-(window as any).triggerImport = (slotIndex: number) => {
-  activeImportSlot = slotIndex;
-  importInput.click();
-};
-
-if (importInput) {
-  importInput.addEventListener('change', (e) => {
-    const target = e.target as HTMLInputElement;
-    if (!target.files || target.files.length === 0) return;
-
-    const file = target.files[0];
-    const reader = new FileReader();
-
-    reader.onload = (event) => {
-      try {
-        const jsonContent = event.target?.result as string;
-        // Basic validation that it represents a valid graph layout
-        const parsed = JSON.parse(jsonContent);
-        if (!parsed.undoStack) throw new Error("Missing undo stack");
-
-        const key = `${SLOT_KEY_PREFIX}${activeImportSlot}`;
-        localStorage.setItem(key, jsonContent);
-
-        alert(`Successfully imported into Slot ${activeImportSlot}`);
-        renderSlotManager();
-        updateSlotSelectUI();
-
-      } catch (err) {
-        console.error("Import failed format validation", err);
-        alert("Invalid file format. Please choose a valid OWLRunner JSON export.");
-      }
-
-      // Clear input so same file can be selected again later if needed
-      target.value = '';
-    };
-
-    reader.readAsText(file);
-  });
-}
-
-// --------------------------------------------------------------------------------------------------
-// --- ONTOLOGY METADATA MODE ---
-// --------------------------------------------------------------------------------------------------
-
-function renderOntologyMetadata() {
-  const uriInput = document.getElementById('ontology-uri-input') as HTMLInputElement;
-  const docInput = document.getElementById('ontology-doc-input') as HTMLTextAreaElement;
-  if (!uriInput || !docInput) return;
-
-  uriInput.value = (cy.data('ontologyURI') as string) || 'http://example.org/ontology#';
-  docInput.value = (cy.data('ontologyDoc') as string) || '';
-}
-
-document.getElementById('ontology-uri-input')?.addEventListener('change', (e) => {
-  cy.data('ontologyURI', (e.target as HTMLInputElement).value);
-  captureGraphState();
-});
-
-document.getElementById('ontology-doc-input')?.addEventListener('change', (e) => {
-  cy.data('ontologyDoc', (e.target as HTMLTextAreaElement).value);
-  captureGraphState();
-});
-
-// --------------------------------------------------------------------------------------------------
-// --- DOCUMENTATION MODE ---
-// --------------------------------------------------------------------------------------------------
-
-function renderDocumentationTable() {
-  const tbody = document.getElementById('doc-table-body');
-  if (!tbody) return;
-
-  tbody.innerHTML = '';
-
-  const renderRow = (node: cytoscape.NodeSingular, depth: number) => {
-    if (node.hasClass('anchor-node')) return;
-
-    const id = node.id();
-    const label = node.data('label') || id;
-    const comment = node.data('comment') || '';
-
-    let typeLabel = 'Unknown';
-    let typeClass = '';
-    if (node.hasClass('class-node')) { typeLabel = 'Class'; typeClass = 'doc-type-class'; }
-    else if (node.hasClass('attr-obj')) { typeLabel = 'Object Attr'; typeClass = 'doc-type-obj'; }
-    else if (node.hasClass('attr-str')) { typeLabel = 'String Attr'; typeClass = 'doc-type-str'; }
-    else if (node.hasClass('attr-col')) { typeLabel = 'Collective Attr'; typeClass = 'doc-type-col'; }
-
-    const indent = '&nbsp;&nbsp;&nbsp;&nbsp;'.repeat(depth);
-    const prefix = depth > 0 ? '↳ ' : '';
-
-    const tr = document.createElement('tr');
-    tr.innerHTML = `
-      <td class="doc-col-type"><span class="doc-type-badge ${typeClass}">${typeLabel}</span></td>
-      <td class="doc-col-label"><span class="doc-indent-prefix">${indent}${prefix}</span><strong>${label}</strong></td>
-      <td class="doc-col-input">
-        <textarea class="doc-input" data-node-id="${id}" placeholder="Add documentation...">${comment}</textarea>
-      </td>
-    `;
-    tbody.appendChild(tr);
-  };
-
-  const renderClassHierarchy = (classNode: cytoscape.NodeSingular, depth: number) => {
-    renderRow(classNode, depth);
-
-    const classId = classNode.id();
-    // Find all nodes that are children of this class
-    const children = cy.nodes().filter(n => n.data('parent') === classId);
-
-    // Sort order: string attr -> object attr -> collective attr -> subclasses
-    children.filter('.attr-str').forEach(child => renderRow(child, depth + 1));
-    children.filter('.attr-obj').forEach(child => renderRow(child, depth + 1));
-    children.filter('.attr-col').forEach(child => renderRow(child, depth + 1));
-    children.filter('.class-node').forEach(child => renderClassHierarchy(child, depth + 1));
-  };
-
-  // Find root classes (no parent) and render them recursively
-  const rootClasses = cy.nodes('.class-node').filter(n => !n.data('parent'));
-
-  rootClasses.forEach(rootClass => {
-    renderClassHierarchy(rootClass, 0);
-  });
-
-  const inputs = tbody.querySelectorAll('.doc-input');
-  inputs.forEach(input => {
-    input.addEventListener('change', (e) => {
-      const target = e.target as HTMLTextAreaElement;
-      const nodeId = target.getAttribute('data-node-id');
-      const newComment = target.value;
-
-      if (nodeId) {
-        const node = cy.getElementById(nodeId);
-        if (node.nonempty()) {
-          node.data('comment', newComment);
-          captureGraphState();
-        }
-      }
-    });
-  });
-}
-
-// --------------------------------------------------------------------------------------------------
-// --- OWL EXPORT SYSTEM ---
-// --------------------------------------------------------------------------------------------------
-
-function sanitizeURI(name: string): string {
-  // Basic sanitization for valid OWL fragments
-  return name.replace(/[^a-zA-Z0-9_-]/g, '_');
-}
-
-function escapeXML(unsafe: string): string {
-  return unsafe.replace(/[<>&'"]/g, (c) => {
-    switch (c) {
-      case '<': return '&lt;';
-      case '>': return '&gt;';
-      case '&': return '&amp;';
-      case "'": return '&apos;';
-      case '"': return '&quot;';
-      default: return c;
-    }
-  });
-}
-
-function exportToOWL() {
-  const baseURI = (cy.data('ontologyURI') as string) || "http://example.org/ontology#";
-  const ontologyDoc = (cy.data('ontologyDoc') as string) || "";
-
-  // Extract base URL without the hash/slash for xml:base and ontology rdf:about
-  let strippedURI = baseURI;
-  if (strippedURI.endsWith('#') || strippedURI.endsWith('/')) {
-    strippedURI = strippedURI.slice(0, -1);
-  }
-
-  let xml = `<?xml version="1.0"?>\n`;
-  xml += `<rdf:RDF xmlns="${baseURI}"\n`;
-  xml += `     xml:base="${strippedURI}"\n`;
-  xml += `     xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"\n`;
-  xml += `     xmlns:owl="http://www.w3.org/2002/07/owl#"\n`;
-  xml += `     xmlns:rdfs="http://www.w3.org/2000/01/rdf-schema#"\n`;
-  xml += `     xmlns:xsd="http://www.w3.org/2001/XMLSchema#">\n`;
-
-  if (ontologyDoc) {
-    xml += `    <owl:Ontology rdf:about="${strippedURI}">\n`;
-    xml += `        <rdfs:comment>${escapeXML(ontologyDoc)}</rdfs:comment>\n`;
-    xml += `    </owl:Ontology>\n\n`;
-  } else {
-    xml += `    <owl:Ontology rdf:about="${strippedURI}"/>\n\n`;
-  }
-
-  // 1. Export Classes
-  cy.nodes('.class-node').forEach(node => {
-    const className = sanitizeURI(node.data('label') || node.id());
-    xml += `    <owl:Class rdf:about="${baseURI}${className}">\n`;
-
-    const comment = node.data('comment');
-    if (comment) {
-      xml += `        <rdfs:comment>${escapeXML(comment)}</rdfs:comment>\n`;
-    }
-
-    // Check for parent (subclass)
-    const parentId = node.data('parent');
-    if (parentId) {
-      const parentNode = cy.getElementById(parentId);
-      if (parentNode.nonempty() && parentNode.hasClass('class-node')) {
-        const parentName = sanitizeURI(parentNode.data('label') || parentNode.id());
-        xml += `        <rdfs:subClassOf rdf:resource="${baseURI}${parentName}"/>\n`;
-      }
-    }
-    xml += `    </owl:Class>\n\n`;
-  });
-
-  // 2. Export Properties (Attributes)
-  cy.nodes('.attr-obj, .attr-str, .attr-col').forEach(node => {
-    const propName = sanitizeURI(node.data('label') || node.id());
-    const isObj = node.hasClass('attr-obj');
-    const isCol = node.hasClass('attr-col');
-    const isStr = node.hasClass('attr-str');
-
-    const propType = (isObj || isCol) ? 'owl:ObjectProperty' : 'owl:DatatypeProperty';
-    xml += `    <${propType} rdf:about="${baseURI}${propName}">\n`;
-
-    const comment = node.data('comment');
-    if (comment) {
-      xml += `        <rdfs:comment>${escapeXML(comment)}</rdfs:comment>\n`;
-    }
-
-    if (isObj || isStr) {
-      xml += `        <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#FunctionalProperty"/>\n`;
-    }
-
-    // Domain is the parent class
-    const parentId = node.data('parent');
-    if (parentId) {
-      const parentNode = cy.getElementById(parentId);
-      if (parentNode.nonempty()) {
-        const parentName = sanitizeURI(parentNode.data('label') || parentNode.id());
-        xml += `        <rdfs:domain rdf:resource="${baseURI}${parentName}"/>\n`;
-      }
-    }
-
-    // Range
-    if (isStr) {
-      xml += `        <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/>\n`;
-    } else {
-      // Object properties range based on outgoing edges
-      const edges = node.outgoers('edge');
-      edges.forEach(edge => {
-        const targetNode = edge.target();
-        if (targetNode.hasClass('class-node')) {
-          const targetName = sanitizeURI(targetNode.data('label') || targetNode.id());
-          xml += `        <rdfs:range rdf:resource="${baseURI}${targetName}"/>\n`;
-        }
-      });
-    }
-
-    xml += `    </${propType}>\n\n`;
-  });
-
-  xml += `</rdf:RDF>\n`;
-
-  // Provide to user as a download
-  downloadFile('ontology.owl', xml);
-}
-
-function downloadFile(filename: string, text: string) {
-  const blob = new Blob([text], { type: 'application/rdf+xml' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
-}
-
-document.getElementById('export-owl-btn')?.addEventListener('click', exportToOWL);
 // --------------------------------------------------------------------------------------------------
