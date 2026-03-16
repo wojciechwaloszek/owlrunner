@@ -13,6 +13,9 @@ export class LayerManager {
   private stateUpdateCallback: () => void;
   // Track which layers are currently active in the view
   private activeFilters: Set<string> = new Set();
+  
+  // Track context menu element
+  private contextMenuEl: HTMLElement | null = null;
 
   // Constructor
   constructor(cy: cytoscape.Core, stateUpdateCallback: () => void) {
@@ -161,6 +164,112 @@ export class LayerManager {
           toggleBtn.classList.add('collapsed');
         }
       });
+    }
+
+    // Context menu on right-click / hold
+    this.cy.on('cxttap', '.class-node', (e) => {
+      e.stopPropagation();
+      this.showContextMenu(e.target, e.renderedPosition);
+    });
+
+    // Close context menu on outside click or pan/zoom
+    this.cy.on('tap pan zoom', () => {
+      this.hideContextMenu();
+    });
+    
+    document.addEventListener('click', (e) => {
+      if (this.contextMenuEl && !this.contextMenuEl.contains(e.target as Node)) {
+          this.hideContextMenu();
+      }
+    });
+  }
+
+  // --- Context Menu ---
+  private showContextMenu(node: cytoscape.NodeSingular, renderedPosition: { x: number, y: number }) {
+    this.hideContextMenu();
+
+    const overlay = document.getElementById('node-buttons-overlay');
+    if (!overlay) return;
+
+    this.contextMenuEl = document.createElement('div');
+    this.contextMenuEl.className = 'layer-context-menu';
+    this.contextMenuEl.style.left = `${renderedPosition.x}px`;
+    this.contextMenuEl.style.top = `${renderedPosition.y}px`;
+    
+    // Stop propagation so clicking inside doesn't close the menu
+    this.contextMenuEl.addEventListener('click', (e) => {
+      e.stopPropagation();
+    });
+
+    let targetNodes = this.cy.collection().merge(node);
+    if (node.selected()) {
+      const selectedClasses = this.cy.$(':selected').filter('.class-node');
+      if (selectedClasses.length > 0) {
+        targetNodes = selectedClasses;
+      }
+    }
+
+    const title = document.createElement('h4');
+    if (targetNodes.length > 1) {
+      title.textContent = `Layers: ${targetNodes.length} classes`;
+    } else {
+      title.textContent = `Layers: ${node.data('label') || node.id()}`;
+    }
+    this.contextMenuEl.appendChild(title);
+
+    const layers = this.getLayers();
+    if (layers.length === 0) {
+      const empty = document.createElement('div');
+      empty.style.fontSize = '0.75rem';
+      empty.style.color = 'var(--text-muted)';
+      empty.textContent = 'No layers defined.';
+      this.contextMenuEl.appendChild(empty);
+    } else {
+      const nodeLayers = (node.data('layers') as string[]) || [];
+      
+      layers.forEach(l => {
+        const label = document.createElement('label');
+        label.className = 'layer-checkbox-label';
+        
+        const isChecked = nodeLayers.includes(l.id) ? 'checked' : '';
+        label.innerHTML = `
+          <input type="checkbox" value="${l.id}" ${isChecked}>
+          <span class="layer-color-badge" style="background-color: ${l.color}; width: 10px; height: 10px;"></span>
+          ${l.name}
+        `;
+        
+        label.querySelector('input')?.addEventListener('change', (e) => {
+          const target = e.target as HTMLInputElement;
+          const layerId = target.value;
+          
+          this.cy.batch(() => {
+            targetNodes.forEach(n => {
+              let currentLayers = (n.data('layers') as string[]) || [];
+              
+              if (target.checked && !currentLayers.includes(layerId)) {
+                currentLayers.push(layerId);
+              } else if (!target.checked && currentLayers.includes(layerId)) {
+                currentLayers = currentLayers.filter(id => id !== layerId);
+              }
+              
+              n.data('layers', currentLayers);
+            });
+          });
+
+          this.stateUpdateCallback();
+        });
+        
+        this.contextMenuEl.appendChild(label);
+      });
+    }
+
+    overlay.appendChild(this.contextMenuEl);
+  }
+
+  private hideContextMenu() {
+    if (this.contextMenuEl) {
+      this.contextMenuEl.remove();
+      this.contextMenuEl = null;
     }
   }
 
