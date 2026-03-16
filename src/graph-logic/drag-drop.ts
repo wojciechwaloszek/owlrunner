@@ -16,7 +16,7 @@ export function applyDragDropLogic(cy: cytoscape.Core,
     const DROP_SNAP_THRESHOLD = options?.dropSnapThreshold ?? 20;
 
     cy.on('grabon', options?.eligibleChildSelector || 'node:child', function (event) {
-        if (cy.$('node:selected').length > 0) return;
+        if (cy.$('node:selected').length > 1) return;
 
         const node = event.target;
         const oldParentId = node.parent().id();
@@ -31,7 +31,7 @@ export function applyDragDropLogic(cy: cytoscape.Core,
     });
 
     cy.on('freeon', function (event) {
-        if (cy.$('node:selected').length > 0) return;
+        if (cy.$('node:selected').length > 1) return;
 
         const node = event.target;
         const oldParentId = node.scratch('oldParent');

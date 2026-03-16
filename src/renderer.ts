@@ -399,6 +399,9 @@ cy.on('tap', 'node', function (evt) {
 cy.on('tap', function (evt) {
   if (evt.target === cy && edgeModeActive && sourceNodeForEdge) {
     cancelEdgeMode();
+  } else if (evt.target === cy && !edgeModeActive) {
+    cy.elements().removeClass('selected');
+    updateSelectionInfo();
   }
 });
 
