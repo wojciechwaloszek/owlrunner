@@ -8,6 +8,7 @@ import { SlotManager } from './components/slot-manager';
 import { OntologyMetadata } from './components/ontology-metadata';
 import { DocumentationTable } from './components/documentation-table';
 import { getOwlRunnerStyle } from './graph-styles/owl-runner-style';
+import { LayerManager } from './components/layer-manager';
 
 // Initial setup for Cytoscape instance
 const cy = cytoscape({
@@ -80,6 +81,9 @@ navBtns.forEach(btn => {
           documentationTable.refresh();
         } else if (targetId === 'view-ontology') {
           ontologyMetadata.refresh();
+          layerManager.refresh();
+        } else if (targetId === 'view-editor') {
+          layerManager.refresh();
         }
       } else {
         container.classList.remove('active');
@@ -547,12 +551,15 @@ function restoreState(stateStr: string) {
   if (parsedState.data) {
     cy.data('ontologyURI', parsedState.data.ontologyURI || '');
     cy.data('ontologyDoc', parsedState.data.ontologyDoc || '');
+    cy.data('layers', parsedState.data.layers || []);
   } else {
     cy.data('ontologyURI', '');
     cy.data('ontologyDoc', '');
+    cy.data('layers', []);
   }
 
   ontologyMetadata.refresh();
+  layerManager.refresh();
 
   updateSelectionInfo();
   updateHoverButtons();
@@ -681,5 +688,9 @@ ontologyMetadata.init();
 // Documentation table
 const documentationTable = new DocumentationTable(cy, captureGraphState);
 documentationTable.init();
+
+// Layer manager
+const layerManager = new LayerManager(cy, captureGraphState);
+layerManager.init();
 
 // --------------------------------------------------------------------------------------------------

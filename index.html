@@ -7,6 +7,7 @@
   <!-- Use a modern Google font -->
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/src/index.css">
+  <link rel="stylesheet" href="/src/layers.css">
 </head>
 
 <body>
@@ -68,6 +69,15 @@
         </aside>
 
         <main class="graph-area">
+          <div id="layer-filter-bar" class="layer-filter-bar">
+            <div class="layer-filter-header">
+              <span class="layer-filter-title">Layer Filters</span>
+              <button id="toggle-layer-filter-btn" class="icon-btn">▼</button>
+            </div>
+            <div id="layer-filter-content" class="layer-filter-content active">
+              <!-- Checkboxes injected by layer-manager.ts -->
+            </div>
+          </div>
           <div id="cy"></div>
           <!-- Overlay for floating + buttons attached to nodes -->
           <div id="node-buttons-overlay"></div>
@@ -102,6 +112,7 @@
                 <th>Element Type</th>
                 <th>Element Label</th>
                 <th>Documentation (Comment)</th>
+                <th>Layers</th>
               </tr>
             </thead>
             <tbody id="doc-table-body">
@@ -128,6 +139,17 @@
             <textarea id="ontology-doc-input" class="doc-input" style="min-height: 150px;"
               placeholder="Add global ontology documentation..."></textarea>
           </div>
+        </div>
+
+        <div class="ontology-metadata-section">
+          <h3>Layer Definitions</h3>
+          <p class="section-description">Define structural layers (strata) for your ontology. You can assign classes to these layers in the Documentation tab.</p>
+          
+          <div class="layer-defs-container" id="layer-defs-container">
+            <!-- Layers injected by layer-manager.ts -->
+          </div>
+          
+          <button id="add-layer-btn" class="primary-btn add-layer-btn">+ Add New Layer</button>
         </div>
       </main>
 

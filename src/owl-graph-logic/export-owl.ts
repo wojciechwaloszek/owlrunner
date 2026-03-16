@@ -53,6 +53,8 @@ export function exportToOWL(cy: cytoscape.Core) {
 
     // 1. Export Classes
     cy.nodes('.class-node').forEach(node => {
+        if (node.hasClass('hidden-layer')) return;
+
         const className = sanitizeURI(node.data('label') || node.id());
         xml += `    <owl:Class rdf:about="${baseURI}${className}">\n`;
 
@@ -75,6 +77,8 @@ export function exportToOWL(cy: cytoscape.Core) {
 
     // 2. Export Properties (Attributes)
     cy.nodes('.attr-obj, .attr-str, .attr-col').forEach(node => {
+        if (node.hasClass('hidden-layer')) return;
+
         const propName = sanitizeURI(node.data('label') || node.id());
         const isObj = node.hasClass('attr-obj');
         const isCol = node.hasClass('attr-col');

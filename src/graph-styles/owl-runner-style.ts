@@ -105,6 +105,13 @@ const owlRunnerStyle: cytoscape.StylesheetJson = [
             'target-arrow-color': '#f59e0b',
             'border-width': '4px'
         }
+    },
+    // Hidden layers
+    {
+        selector: '.hidden-layer',
+        style: {
+            'display': 'none'
+        }
     }
 ];
 

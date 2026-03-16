@@ -21,6 +21,8 @@ export class DocumentationTable {
 
         tbody.innerHTML = '';
 
+        const layers = (this.cy.data('layers') as { id: string, name: string, color: string }[]) || [];
+
         const renderRow = (node: cytoscape.NodeSingular, depth: number) => {
             if (node.hasClass('anchor-node')) return;
 
@@ -38,12 +40,39 @@ export class DocumentationTable {
             const indent = '&nbsp;&nbsp;&nbsp;&nbsp;'.repeat(depth);
             const prefix = depth > 0 ? '↳ ' : '';
 
+            let layersHtml = '';
+            if (node.hasClass('class-node')) {
+                const nodeLayers = (node.data('layers') as string[]) || [];
+                
+                layersHtml = `<div class="layer-checkbox-group">`;
+                if (layers.length === 0) {
+                    layersHtml += `<span style="color: var(--text-muted); font-size: 0.75rem;">No layers defined</span>`;
+                } else {
+                    layers.forEach(l => {
+                        const isChecked = nodeLayers.includes(l.id) ? 'checked' : '';
+                        layersHtml += `
+                            <label class="layer-checkbox-label" title="${l.name}">
+                                <input type="checkbox" class="layer-checkbox-input" data-node-id="${id}" value="${l.id}" ${isChecked}>
+                                <span class="layer-color-badge" style="background-color: ${l.color}; width: 10px; height: 10px;"></span>
+                                <span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 60px;">${l.name}</span>
+                            </label>
+                        `;
+                    });
+                }
+                layersHtml += `</div>`;
+            } else {
+                layersHtml = `<span style="color: var(--text-muted); font-size: 0.75rem;">(Inherited from parent)</span>`;
+            }
+
             const tr = document.createElement('tr');
             tr.innerHTML = `
                 <td class="doc-col-type"><span class="doc-type-badge ${typeClass}">${typeLabel}</span></td>
                 <td class="doc-col-label"><span class="doc-indent-prefix">${indent}${prefix}</span><strong>${label}</strong></td>
                 <td class="doc-col-input">
                     <textarea class="doc-input" data-node-id="${id}" placeholder="Add documentation...">${comment}</textarea>
+                </td>
+                <td class="doc-col-layers">
+                    ${layersHtml}
                 </td>
             `;
             tbody.appendChild(tr);
@@ -81,6 +110,30 @@ export class DocumentationTable {
                     const node = this.cy.getElementById(nodeId);
                     if (node.nonempty()) {
                         node.data('comment', newComment);
+                        this.documentationUpdateCallback();
+                    }
+                }
+            });
+        });
+
+        const checkboxes = tbody.querySelectorAll('.layer-checkbox-input');
+        checkboxes.forEach(input => {
+            input.addEventListener('change', (e) => {
+                const target = e.target as HTMLInputElement;
+                const nodeId = target.getAttribute('data-node-id');
+                const layerId = target.value;
+                const isChecked = target.checked;
+
+                if (nodeId) {
+                    const node = this.cy.getElementById(nodeId);
+                    if (node.nonempty()) {
+                        let nodeLayers = (node.data('layers') as string[]) || [];
+                        if (isChecked && !nodeLayers.includes(layerId)) {
+                            nodeLayers.push(layerId);
+                        } else if (!isChecked && nodeLayers.includes(layerId)) {
+                            nodeLayers = nodeLayers.filter(id => id !== layerId);
+                        }
+                        node.data('layers', nodeLayers);
                         this.documentationUpdateCallback();
                     }
                 }
