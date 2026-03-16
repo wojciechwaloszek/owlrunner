@@ -45,6 +45,8 @@ export function applyDragDropLogic(cy: cytoscape.Core,
         potentialParents.forEach(parent => {
             // Skip self
             if (parent.id() === node.id()) return;
+            // Skip if parent is a descendant of the node
+            if (node.descendants().contains(parent)) return;
 
             // Read parent bounding box
             const parentBoundingBox = parent.boundingBox();
