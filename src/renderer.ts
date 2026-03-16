@@ -18,19 +18,6 @@ const cy = cytoscape({
   // --------------------------------------------------------------------------------------------------
 
   // Initial elements with compound structure
-  /* data to test something
-  elements: [
-    { data: { id: 'Person', label: 'Person' }, classes: 'class-node' },
-    { data: { id: 'hasFriend', label: 'hasFriend', parent: 'Person' }, classes: 'attr-obj' },
-    { data: { id: 'hasName', label: 'hasName', parent: 'Person' }, classes: 'attr-str' },
-    { data: { id: 'age', label: 'age', parent: 'Person' }, classes: 'attr-str' },
-    { data: { id: 'nicknames', label: 'nicknames', parent: 'Person' }, classes: 'attr-col' },
-
-    // Subclass within Person
-    { data: { id: 'Employee', label: 'Employee', parent: 'Person' }, classes: 'class-node' },
-    { data: { id: 'worksFor', label: 'worksFor', parent: 'Employee' }, classes: 'attr-obj' },
-    { data: { id: 'employeeId', label: 'employeeId', parent: 'Employee' }, classes: 'attr-str' }
-  ],*/
   elements: [
     { data: { id: 'class_1', label: 'Class 1' }, classes: 'class-node' },
   ],
