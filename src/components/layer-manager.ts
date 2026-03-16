@@ -130,15 +130,30 @@ export class LayerManager {
       // Ensure attributes are hidden if their parent is hidden
       this.cy.nodes('.attr-obj, .attr-str, .attr-col').forEach(attr => {
         const parentId = attr.data('parent');
+        let hideAttr = false;
+
         if (parentId) {
           const parent = this.cy.getElementById(parentId);
-          if (parent.nonempty()) {
-            if (parent.hasClass('hidden-layer')) {
-              attr.addClass('hidden-layer');
-            } else {
-              attr.removeClass('hidden-layer');
-            }
+          if (parent.nonempty() && parent.hasClass('hidden-layer')) {
+            hideAttr = true;
           }
+        }
+
+        // Also hide if attribute specifically targets a hidden class
+        if (!hideAttr) {
+            const outEdges = attr.outgoers('edge');
+            outEdges.forEach(edge => {
+                const targetNode = edge.target();
+                if (targetNode.hasClass('class-node') && targetNode.hasClass('hidden-layer')) {
+                    hideAttr = true;
+                }
+            });
+        }
+
+        if (hideAttr) {
+          attr.addClass('hidden-layer');
+        } else {
+          attr.removeClass('hidden-layer');
         }
       });
     });
