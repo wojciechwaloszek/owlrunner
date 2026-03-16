@@ -7,6 +7,7 @@ import { SaveLoad } from './basic-logic/save-load';
 import { SlotManager } from './components/slot-manager';
 import { OntologyMetadata } from './components/ontology-metadata';
 import { DocumentationTable } from './components/documentation-table';
+import { getOwlRunnerStyle } from './graph-styles/owl-runner-style';
 
 // Initial setup for Cytoscape instance
 const cy = cytoscape({
@@ -33,115 +34,7 @@ const cy = cytoscape({
   elements: [
     { data: { id: 'class_1', label: 'Class 1' }, classes: 'class-node' },
   ],
-
-  // --------------------------------------------------------------------------------------------------
-  // --- STYLES ---
-  // --------------------------------------------------------------------------------------------------
-
-  style: [
-    // Base style for Class concepts
-    {
-      selector: '.class-node',
-      style: {
-        'shape': 'round-rectangle',
-        'background-color': '#ffffff', // pure white for root classes
-        'border-width': '2px',
-        'border-color': '#475569',
-        'label': 'data(label)',
-        'text-valign': 'top',
-        'text-halign': 'center',
-        'text-margin-y': 15,
-        'font-family': 'Inter, sans-serif',
-        'font-weight': 'bold',
-        'font-size': '16px',
-        'color': '#0f172a',
-        'padding': '5px'
-      }
-    },
-    // Dummy anchors to force bounding box expansions
-    {
-      selector: '.anchor-node',
-      style: {
-        'width': '1px',
-        'height': '1px',
-        'background-opacity': 0,
-        'border-width': 0,
-        'events': 'no' // make unclickable
-      }
-    },
-    // Subclasses look different (transparent and dashed)
-    {
-      selector: '.class-node[^parent]',
-      style: {
-        'background-color': 'rgba(241, 245, 249, 0.6)', // transparent slate
-        'border-style': 'dashed',
-        'border-color': '#64748b',
-        'border-width': '2px',
-      }
-    },
-    // General attribute port styles
-    {
-      selector: '.attr-obj, .attr-str, .attr-col',
-      style: {
-        'shape': 'round-rectangle',
-        'width': 'label',
-        'height': 'label',
-        'padding': '10px',
-        'label': 'data(label)',
-        'font-size': '12px',
-        'font-family': 'Inter, sans-serif',
-        'font-weight': 'bold',
-        'color': '#ffffff', // White text on colored pills
-        'text-valign': 'center',
-        'text-halign': 'center',
-        'text-margin-x': 0,
-        'text-margin-y': 0
-      }
-    },
-    // Object attributes (Left edge / WEST)
-    {
-      selector: '.attr-obj',
-      style: {
-        'background-color': '#3b82f6', // blue
-      }
-    },
-    // String/Integer attributes (Right edge / EAST)
-    {
-      selector: '.attr-str',
-      style: {
-        'background-color': '#10b981', // green
-      }
-    },
-    // Collective attributes (Bottom edge / SOUTH)
-    {
-      selector: '.attr-col',
-      style: {
-        'background-color': '#8b5cf6', // purple
-      }
-    },
-    {
-      selector: 'edge',
-      style: {
-        'width': 3,
-        'line-color': '#64748b', // Slate 500
-        'target-arrow-color': '#64748b',
-        'target-arrow-shape': 'triangle', //triangle',
-        'curve-style': 'bezier',
-        'opacity': 0.8
-      }
-    },
-    {
-      selector: ':selected',
-      style: {
-        'background-color': '#f59e0b', // Amber for selection
-        'border-color': '#d97706',
-        'line-color': '#f59e0b',
-        'target-arrow-color': '#f59e0b',
-        'border-width': '4px'
-      }
-    }
-  ],
-
+  style: getOwlRunnerStyle(),
   layout: {
     name: 'preset'
   }
