@@ -107,14 +107,15 @@ export function applyOWLCompoundLayout(cy: cytoscape.Core) {
         if (objectAttrs.length > 0) leftH -= PADDING;
 
         // String attrs (right-edge aligned)
+        const STRING_ATTR_PADDING = 4;
         let rightY = currentY;
         let rightH = 0;
         stringAttrs.forEach(child => {
             child.position({ x: rightEdge - child.outerWidth() / 2, y: rightY + child.outerHeight() / 2 });
-            rightY += child.outerHeight() + PADDING;
-            rightH += child.outerHeight() + PADDING;
+            rightY += child.outerHeight() + STRING_ATTR_PADDING;
+            rightH += child.outerHeight() + STRING_ATTR_PADDING;
         });
-        if (stringAttrs.length > 0) rightH -= PADDING;
+        if (stringAttrs.length > 0) rightH -= STRING_ATTR_PADDING;
 
         const row2H = Math.max(leftH, midH, rightH);
 
@@ -155,22 +156,28 @@ export function applyOWLCompoundLayout(cy: cytoscape.Core) {
 function bendOverlappingEdges(cy: cytoscape.Core) {
     // get all edges (not self-loops, so target is not in source ancestors)
     const edges = cy.edges().filter(edge => !edge.source().ancestors().contains(edge.target()));
-    // for each edge
+    // for each edge - unbend it
+    edges.forEach(edge => {
+        edge.style({
+            'curve-style': 'bezier',
+            'control-point-distance': [],
+            'control-point-weight': []
+        });
+    });
+    // for each edge - find overlapping edges
     edges.forEach(edge => {
         // get bounding box of edge
         const bbox = edge.boundingBox();
         // if edge is overlapping with another edge
-        const overlappingEdges = edges;
-        /* const overlappingEdges = edges.filter(otherEdge =>
+        const overlappingEdges = edges.filter(otherEdge =>
             edge.id() !== otherEdge.id() &&
             bbox.x1 < otherEdge.boundingBox().x2 &&
             bbox.x2 > otherEdge.boundingBox().x1 &&
             bbox.y1 < otherEdge.boundingBox().y2 &&
             bbox.y2 > otherEdge.boundingBox().y1
-        ); */
+        );
         // for each overlapping edge
         overlappingEdges.forEach(overlappingEdge => {
-            if (edge.id() === overlappingEdge.id()) return;
             // check the "severity" of the overlap
             // imagine that the edge is 30px wide, so it's a rotated rectangle with width of 30px
             // and check how much it overlaps with the other edge, so what is the length
