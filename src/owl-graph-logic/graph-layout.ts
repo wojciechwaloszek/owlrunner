@@ -1,4 +1,5 @@
 import cytoscape from 'cytoscape';
+import { b } from 'vite/dist/node/types.d-aGj9QkWt';
 
 // Helper function to get estimated label width
 function getLabelWidth(node: cytoscape.NodeSingular): number {
@@ -146,4 +147,228 @@ export function applyOWLCompoundLayout(cy: cytoscape.Core) {
         const dims = layoutClass(root);
     });
 
+    bendOverlappingEdges(cy);
+
+}
+
+// the function to bend edges that are overlapping
+function bendOverlappingEdges(cy: cytoscape.Core) {
+    // get all edges (not self-loops, so target is not in source ancestors)
+    const edges = cy.edges().filter(edge => !edge.source().ancestors().contains(edge.target()));
+    // for each edge
+    edges.forEach(edge => {
+        // get bounding box of edge
+        const bbox = edge.boundingBox();
+        // if edge is overlapping with another edge
+        const overlappingEdges = edges;
+        /* const overlappingEdges = edges.filter(otherEdge =>
+            edge.id() !== otherEdge.id() &&
+            bbox.x1 < otherEdge.boundingBox().x2 &&
+            bbox.x2 > otherEdge.boundingBox().x1 &&
+            bbox.y1 < otherEdge.boundingBox().y2 &&
+            bbox.y2 > otherEdge.boundingBox().y1
+        ); */
+        // for each overlapping edge
+        overlappingEdges.forEach(overlappingEdge => {
+            if (edge.id() === overlappingEdge.id()) return;
+            // check the "severity" of the overlap
+            // imagine that the edge is 30px wide, so it's a rotated rectangle with width of 30px
+            // and check how much it overlaps with the other edge, so what is the length
+            // of the part of the edge that is overlapping within the rectangle
+            // 1. Get the rotated rectangle (edge "fattened" by 15px on each side)
+            // calculate the angle of the edge
+            let edgeAngle = Math.atan2(edge.sourceEndpoint().y - edge.targetEndpoint().y, edge.targetEndpoint().x - edge.sourceEndpoint().x);
+            let rotatedAngle = edgeAngle + Math.PI / 2;
+            // calculate the four corners of the rotated rectangle
+            const OVERLAP_DISTANCE = 15;
+            let x11 = edge.sourceEndpoint().x + OVERLAP_DISTANCE * Math.cos(rotatedAngle);
+            let y11 = edge.sourceEndpoint().y - OVERLAP_DISTANCE * Math.sin(rotatedAngle);
+            let x12 = edge.sourceEndpoint().x - OVERLAP_DISTANCE * Math.cos(rotatedAngle);
+            let y12 = edge.sourceEndpoint().y + OVERLAP_DISTANCE * Math.sin(rotatedAngle);
+            let x21 = edge.targetEndpoint().x + OVERLAP_DISTANCE * Math.cos(rotatedAngle);
+            let y21 = edge.targetEndpoint().y - OVERLAP_DISTANCE * Math.sin(rotatedAngle);
+            let x22 = edge.targetEndpoint().x - OVERLAP_DISTANCE * Math.cos(rotatedAngle);
+            let y22 = edge.targetEndpoint().y + OVERLAP_DISTANCE * Math.sin(rotatedAngle);
+
+            // 2. Find the points where the other edge "enters" and "exits" the rectangle
+            // check if the line segment (overlappingEdge.sourceEndpoint(), overlappingEdge.targetEndpoint())
+            // intersects with the rectangle (x11, y11, x12, y12, x21, y21, x22, y22)
+            // check the 4 sides of the rectangle
+
+            // side 1: (x11, y11) to (x21, y21)
+            // if the line segment (overlappingEdge.sourceEndpoint(), overlappingEdge.targetEndpoint())
+            // intersects with the line segment (x11, y11, x21, y21)
+            // calculate the intersection point
+            let intersectionPoints: { x: number, y: number }[] = [];
+            let intersectionPoint = getIntersectionPoint(
+                overlappingEdge.sourceEndpoint().x, overlappingEdge.sourceEndpoint().y,
+                overlappingEdge.targetEndpoint().x, overlappingEdge.targetEndpoint().y,
+                x11, y11, x21, y21);
+            // if the intersection point is on the line segment
+            if (intersectionPoint) {
+                // add the intersection point to the list of intersection points
+                intersectionPoints.push(intersectionPoint);
+            }
+
+            // side 2: (x12, y12) to (x22, y22)
+            intersectionPoint = getIntersectionPoint(
+                overlappingEdge.sourceEndpoint().x, overlappingEdge.sourceEndpoint().y,
+                overlappingEdge.targetEndpoint().x, overlappingEdge.targetEndpoint().y,
+                x12, y12, x22, y22);
+            if (intersectionPoint) {
+                intersectionPoints.push(intersectionPoint);
+            }
+
+            // side 3: (x11, y11) to (x12, y12)
+            intersectionPoint = getIntersectionPoint(
+                overlappingEdge.sourceEndpoint().x, overlappingEdge.sourceEndpoint().y,
+                overlappingEdge.targetEndpoint().x, overlappingEdge.targetEndpoint().y,
+                x11, y11, x12, y12);
+            if (intersectionPoint) {
+                intersectionPoints.push(intersectionPoint);
+            }
+
+            // side 4: (x21, y21) to (x22, y22)
+            intersectionPoint = getIntersectionPoint(
+                overlappingEdge.sourceEndpoint().x, overlappingEdge.sourceEndpoint().y,
+                overlappingEdge.targetEndpoint().x, overlappingEdge.targetEndpoint().y,
+                x21, y21, x22, y22);
+            if (intersectionPoint) {
+                intersectionPoints.push(intersectionPoint);
+            }
+
+            // 3. Calculate the overlapping length
+            // Check if there are at least 2 intersection points
+            if (intersectionPoints.length < 2) {
+                // if not do one more thing
+                // check if the overlapping edge's starting point is inside the rectangle
+                if (isPointInPolygon(overlappingEdge.sourceEndpoint().x, overlappingEdge.sourceEndpoint().y,
+                    x11, y11, x21, y21, x22, y22, x12, y12)) {
+                    intersectionPoints.push(overlappingEdge.sourceEndpoint());
+                }
+                // check if the overlapping edge's ending point is inside the rectangle
+                if (isPointInPolygon(overlappingEdge.targetEndpoint().x, overlappingEdge.targetEndpoint().y,
+                    x11, y11, x21, y21, x22, y22, x12, y12)) {
+                    intersectionPoints.push(overlappingEdge.targetEndpoint());
+                }
+            }
+
+            if (intersectionPoints.length >= 2) {
+                // calculate the overlapping length
+                let overlappingLength = Math.sqrt(
+                    Math.pow(intersectionPoints[0].x - intersectionPoints[1].x, 2) +
+                    Math.pow(intersectionPoints[0].y - intersectionPoints[1].y, 2)
+                );
+                // compare with edge length
+                const edgeLength = Math.sqrt(
+                    Math.pow(edge.targetEndpoint().x - edge.sourceEndpoint().x, 2) +
+                    Math.pow(edge.targetEndpoint().y - edge.sourceEndpoint().y, 2)
+                );
+                // if the overlapping length is greater than 0.5 of edge length, bend both edges
+                if (overlappingLength > edgeLength * 0.5) {
+                    // log
+                    /*console.log('Overlapping edges found');
+                    console.log('Edge: ' + edge.source().style('label') + ' -> ' + edge.target().style('label') +
+                        ' and overlapping edge: ' +
+                        overlappingEdge.source().style('label') + ' -> ' + overlappingEdge.target().style('label'));
+                    console.log('Edge endpoints: ' +
+                        edge.sourceEndpoint().x + ',' + edge.sourceEndpoint().y + ' -> ' +
+                        edge.targetEndpoint().x + ',' + edge.targetEndpoint().y);
+                    console.log('Overlapping edge endpoints: ' +
+                        overlappingEdge.sourceEndpoint().x + ',' + overlappingEdge.sourceEndpoint().y + ' -> ' +
+                        overlappingEdge.targetEndpoint().x + ',' + overlappingEdge.targetEndpoint().y);
+                    console.log('Intersection points: ' +
+                        intersectionPoints[0].x + ',' + intersectionPoints[0].y + ' -> ' +
+                        intersectionPoints[1].x + ',' + intersectionPoints[1].y);
+                    console.log('Overlapping length: ' + overlappingLength);
+                    console.log('Edge length: ' + edgeLength);
+                    console.log('Overlapping percentage: ' + (overlappingLength / edgeLength) * 100 + '%');*/
+
+                    // calculate the overlapping edge angle
+                    let overlappingEdgeAngle = Math.atan2(
+                        overlappingEdge.sourceEndpoint().y - overlappingEdge.targetEndpoint().y,
+                        overlappingEdge.targetEndpoint().x - overlappingEdge.sourceEndpoint().x
+                    );
+                    // if the angle difference is less than 45 degrees, 
+                    // bend the edges opposite ways
+                    if (Math.abs(edgeAngle - overlappingEdgeAngle) < Math.PI / 4) {
+                        edge.style({
+                            'curve-style': 'unbundled-bezier',
+                            'control-point-distance': 50,
+                            'control-point-weight': 0.5
+                        });
+                        overlappingEdge.style({
+                            'curve-style': 'unbundled-bezier',
+                            'control-point-distance': -50,
+                            'control-point-weight': 0.5
+                        });
+                        //edge.addClass('bentLeft');
+                        //overlappingEdge.addClass('bentLeft');
+                    } else {
+                        // bend the edges the same way
+                        edge.style({
+                            'curve-style': 'unbundled-bezier',
+                            'control-point-distance': 50,
+                            'control-point-weight': 0.5
+                        });
+                        overlappingEdge.style({
+                            'curve-style': 'unbundled-bezier',
+                            'control-point-distance': 50,
+                            'control-point-weight': 0.5
+                        });
+                        //edge.addClass('bentRight');
+                        //overlappingEdge.addClass('bentLeft');
+                    }
+                }
+            }
+        });
+    })
+}
+
+function getIntersectionPoint(x1: number, y1: number, x2: number, y2: number, x3: number, y3: number, x4: number, y4: number): { x: number, y: number } | null {
+    // calculate the intersection point of the line segment (x1, y1, x2, y2) and the line segment (x3, y3, x4, y4)
+    // https://en.wikipedia.org/wiki/Line%E2%80%93line_intersection#Given_two_points_on_each_line
+    const denominator = (x1 - x2) * (y3 - y4) - (y1 - y2) * (x3 - x4);
+    if (denominator === 0) {
+        return null;
+    }
+    const t = ((x1 - x3) * (y3 - y4) - (y1 - y3) * (x3 - x4));
+    const u = -((x1 - x2) * (y1 - y3) - (y1 - y2) * (x1 - x3));
+    if (denominator > 0) {
+        if (t >= 0 && t <= denominator && u >= 0 && u <= denominator) {
+            return {
+                x: x1 + t * (x2 - x1) / denominator,
+                y: y1 + t * (y2 - y1) / denominator
+            };
+        }
+    } else {
+        if (t <= 0 && t >= denominator && u <= 0 && u >= denominator) {
+            return {
+                x: x1 + t * (x2 - x1) / denominator,
+                y: y1 + t * (y2 - y1) / denominator
+            };
+        }
+    }
+    return null;
+}
+
+function isPointInPolygon(x: number, y: number, x11: number, y11: number, x21: number, y21: number, x22: number, y22: number, x12: number, y12: number): boolean {
+    // check if the point (x, y) is inside the polygon (x11, y11, x21, y21, x22, y22, x12, y12)
+    // https://en.wikipedia.org/wiki/Point_in_polygon
+    const vertices = [
+        { x: x11, y: y11 },
+        { x: x21, y: y21 },
+        { x: x22, y: y22 },
+        { x: x12, y: y12 }
+    ];
+    let inside = false;
+    for (let i = 0, j = vertices.length - 1; i < vertices.length; j = i++) {
+        const xi = vertices[i].x, yi = vertices[i].y;
+        const xj = vertices[j].x, yj = vertices[j].y;
+
+        const intersect = ((yi > y) != (yj > y)) &&
+            (x < (xj - xi) * (y - yi) / (yj - yi) + xi);
+        if (intersect) inside = !inside;
+    }
+    return inside;
 }
