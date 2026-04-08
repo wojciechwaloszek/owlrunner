@@ -550,9 +550,11 @@ function restoreState(stateStr: string) {
   if (parsedState.data) {
     cy.data('ontologyURI', parsedState.data.ontologyURI || '');
     cy.data('ontologyDoc', parsedState.data.ontologyDoc || '');
+    cy.data('graphStyle', parsedState.data.graphStyle || 'modern');
   } else {
     cy.data('ontologyURI', '');
     cy.data('ontologyDoc', '');
+    cy.data('graphStyle', 'modern');
   }
 
   ontologyMetadata.refresh();

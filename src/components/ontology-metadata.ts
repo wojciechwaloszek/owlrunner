@@ -2,6 +2,8 @@
 // --- ONTOLOGY METADATA MODE ---
 // --------------------------------------------------------------------------------------------------
 
+import { getOwlRunnerStyle } from '../graph-styles/owl-runner-style';
+
 // Export class for ontology metadata
 export class OntologyMetadata {
     private cy: cytoscape.Core;
@@ -17,10 +19,18 @@ export class OntologyMetadata {
     private renderOntologyMetadata() {
         const uriInput = document.getElementById('ontology-uri-input') as HTMLInputElement;
         const docInput = document.getElementById('ontology-doc-input') as HTMLTextAreaElement;
-        if (!uriInput || !docInput) return;
-
-        uriInput.value = (this.cy.data('ontologyURI') as string) || 'http://example.org/ontology#';
-        docInput.value = (this.cy.data('ontologyDoc') as string) || '';
+        const styleSelect = document.getElementById('graph-style-select') as HTMLSelectElement;
+        
+        if (uriInput && docInput) {
+            uriInput.value = (this.cy.data('ontologyURI') as string) || 'http://example.org/ontology#';
+            docInput.value = (this.cy.data('ontologyDoc') as string) || '';
+        }
+        
+        if (styleSelect) {
+            const currentStyle = (this.cy.data('graphStyle') as 'modern' | 'classic') || 'modern';
+            styleSelect.value = currentStyle;
+            this.cy.style(getOwlRunnerStyle(currentStyle));
+        }
     }
 
     // Initialize event listeners for ontology metadata inputs
@@ -32,6 +42,13 @@ export class OntologyMetadata {
 
         document.getElementById('ontology-doc-input')?.addEventListener('change', (e) => {
             this.cy.data('ontologyDoc', (e.target as HTMLTextAreaElement).value);
+            this.metadataUpdateCallback();
+        });
+
+        document.getElementById('graph-style-select')?.addEventListener('change', (e) => {
+            const styleType = (e.target as HTMLSelectElement).value as 'modern' | 'classic';
+            this.cy.data('graphStyle', styleType);
+            this.cy.style(getOwlRunnerStyle(styleType));
             this.metadataUpdateCallback();
         });
     }
