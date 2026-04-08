@@ -35,7 +35,7 @@ const owlRunnerStyle: cytoscape.StylesheetJson = [
     },
     // Subclasses look different (transparent and dashed)
     {
-        selector: '.class-node[^parent]',
+        selector: '.class-node[parent]',
         style: {
             'background-color': 'rgba(241, 245, 249, 0.6)', // transparent slate
             'border-style': 'dashed',
