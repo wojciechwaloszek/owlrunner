@@ -688,3 +688,125 @@ const documentationTable = new DocumentationTable(cy, captureGraphState);
 documentationTable.init();
 
 // --------------------------------------------------------------------------------------------------
+
+// --------------------------------------------------------------------------------------------------
+// --- MCP API INTEGRATION ---
+// --------------------------------------------------------------------------------------------------
+
+declare global {
+  interface Window {
+    mcpAPI?: {
+      onCommand: (callback: (data: any) => void) => void;
+      sendResponse: (data: any) => void;
+    };
+  }
+}
+
+if (window.mcpAPI) {
+  window.mcpAPI.onCommand(async (message: any) => {
+    const { commandId, command, args } = message;
+    try {
+      let result: any = null;
+      switch (command) {
+        case 'get_state':
+          const state = cy.json() as any;
+          const cleanElements = { nodes: [], edges: [] } as any;
+          if (state.elements.nodes) {
+            cleanElements.nodes = state.elements.nodes.map((n: any) => ({ data: n.data, classes: n.classes }));
+          }
+          if (state.elements.edges) {
+            cleanElements.edges = state.elements.edges.map((e: any) => ({ data: e.data, classes: e.classes }));
+          }
+          result = cleanElements;
+          break;
+        case 'add_class':
+          nodeCount++;
+          const newClassId = `class_${nodeCount}`;
+          cy.add({
+            group: 'nodes',
+            data: { id: newClassId, label: args.label || `New Class ${nodeCount}` },
+            classes: 'class-node'
+          });
+          applyOWLCompoundLayout(cy);
+          captureGraphState();
+          result = { id: newClassId };
+          break;
+        case 'add_subclass':
+          nodeCount++;
+          const newSubId = `sub_${nodeCount}`;
+          cy.add({
+            group: 'nodes',
+            data: { id: newSubId, label: args.label || `New Subclass`, parent: args.parentId },
+            classes: 'class-node'
+          });
+          applyOWLCompoundLayout(cy);
+          captureGraphState();
+          if (activeHoverNodeId === args.parentId) updateHoverButtons();
+          result = { id: newSubId };
+          break;
+        case 'add_object_attribute':
+        case 'add_datatype_attribute':
+        case 'add_collective_attribute':
+          const typeMap = {
+            'add_object_attribute': { prefix: 'obj_', cls: 'attr-obj' },
+            'add_datatype_attribute': { prefix: 'str_', cls: 'attr-str' },
+            'add_collective_attribute': { prefix: 'col_', cls: 'attr-col' },
+          };
+          const t = typeMap[command as keyof typeof typeMap];
+          nodeCount++;
+          const newAttrId = `${t.prefix}${nodeCount}`;
+          cy.add({
+            group: 'nodes',
+            data: { id: newAttrId, label: args.label || 'Attribute', parent: args.parentId },
+            classes: t.cls
+          });
+          applyOWLCompoundLayout(cy);
+          captureGraphState();
+          if (activeHoverNodeId === args.parentId) updateHoverButtons();
+          result = { id: newAttrId };
+          break;
+        case 'set_attribute_type':
+          const edgeId = `e_${args.attributeId}_${args.classId}_${Date.now()}`;
+          cy.add({
+            group: 'edges',
+            data: {
+              id: edgeId,
+              source: args.attributeId,
+              target: args.classId
+            }
+          });
+          applyOWLCompoundLayout(cy);
+          captureGraphState();
+          result = { id: edgeId };
+          break;
+        case 'delete_element':
+          const elToDel = cy.getElementById(args.elementId);
+          if (elToDel && !elToDel.empty()) {
+            elToDel.remove();
+            applyOWLCompoundLayout(cy);
+            captureGraphState();
+            result = { success: true };
+          } else {
+            throw new Error(`Element ${args.elementId} not found`);
+          }
+          break;
+        case 'undo':
+          if (undoBtn.disabled) throw new Error("Nothing to undo");
+          undoBtn.click();
+          result = { success: true };
+          break;
+        case 'redo':
+          if (redoBtn.disabled) throw new Error("Nothing to redo");
+          redoBtn.click();
+          result = { success: true };
+          break;
+        default:
+          throw new Error('Unknown command: ' + command);
+      }
+      
+      window.mcpAPI.sendResponse({ commandId, success: true, result });
+    } catch (e: any) {
+      window.mcpAPI.sendResponse({ commandId, success: false, error: e.message });
+    }
+  });
+}
