@@ -709,15 +709,51 @@ if (window.mcpAPI) {
       let result: any = null;
       switch (command) {
         case 'get_state':
-          const state = cy.json() as any;
-          const cleanElements = { nodes: [], edges: [] } as any;
-          if (state.elements.nodes) {
-            cleanElements.nodes = state.elements.nodes.map((n: any) => ({ data: n.data, classes: n.classes }));
-          }
-          if (state.elements.edges) {
-            cleanElements.edges = state.elements.edges.map((e: any) => ({ data: e.data, classes: e.classes }));
-          }
-          result = cleanElements;
+          const cleanJSON: any = { classes: [] };
+          const classNodes = cy.nodes('.class-node');
+          classNodes.forEach(cls => {
+            // Only process root classes (avoid duplicating subclasses at the root level)
+            if (cls.isChild()) return;
+            
+            const classObj: any = {
+              id: cls.id(),
+              label: cls.data('label') || '',
+              subclasses: [],
+              objectAttributes: [],
+              datatypeAttributes: [],
+              collectiveAttributes: []
+            };
+
+            // Map all nested properties and subclasses
+            cls.children().forEach(child => {
+              if (child.hasClass('class-node')) {
+                classObj.subclasses.push({ id: child.id(), label: child.data('label') || '' });
+              } else if (child.hasClass('attr-obj')) {
+                const targetEdges = cy.edges(`[source = "${child.id()}"]`);
+                const targetIds = targetEdges.map(e => e.target().id());
+                classObj.objectAttributes.push({ 
+                  id: child.id(), 
+                  label: child.data('label') || '', 
+                  targetClassIds: targetIds 
+                });
+              } else if (child.hasClass('attr-col')) {
+                const targetEdges = cy.edges(`[source = "${child.id()}"]`);
+                const targetIds = targetEdges.map(e => e.target().id());
+                classObj.collectiveAttributes.push({ 
+                  id: child.id(), 
+                  label: child.data('label') || '', 
+                  targetClassIds: targetIds 
+                });
+              } else if (child.hasClass('attr-str')) {
+                classObj.datatypeAttributes.push({ 
+                  id: child.id(), 
+                  label: child.data('label') || '' 
+                });
+              }
+            });
+            cleanJSON.classes.push(classObj);
+          });
+          result = cleanJSON;
           break;
         case 'add_class':
           nodeCount++;
