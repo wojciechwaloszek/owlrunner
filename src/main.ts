@@ -48,13 +48,26 @@ const createWindow = () => {
 
 import { setupMcpServer } from './mcp-server';
 
+const args = process.argv;
+const noMcpServer = args.includes('-nomcpserver');
+const noMcpLog = args.includes('-nomcplog');
+const portArg = args.find(a => a.startsWith('-mcpport:'));
+const mcpPort = portArg ? parseInt(portArg.split(':')[1], 10) : undefined;
+
+const mcpOptions = {
+  port: mcpPort,
+  disableLog: noMcpLog
+};
+
 // This method will be called when Electron has finished
 // initialization and is ready to create browser windows.
 // Some APIs can only be used after this event occurs.
 app.on('ready', async () => {
   const mainWindow = createWindow();
   // Initialize MCP Server
-  await setupMcpServer(mainWindow);
+  if (!noMcpServer) {
+    await setupMcpServer(mainWindow, mcpOptions);
+  }
 });
 
 // Quit when all windows are closed, except on macOS. There, it's common
@@ -71,6 +84,8 @@ app.on('activate', async () => {
   // dock icon is clicked and there are no other windows open.
   if (BrowserWindow.getAllWindows().length === 0) {
     const mainWindow = createWindow();
-    await setupMcpServer(mainWindow);
+    if (!noMcpServer) {
+      await setupMcpServer(mainWindow, mcpOptions);
+    }
   }
 });

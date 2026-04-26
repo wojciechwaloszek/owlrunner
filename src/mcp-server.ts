@@ -10,13 +10,26 @@ import {
   ListToolsRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
 
-const logStream = fs.createWriteStream(path.join(process.env['USERPROFILE'] || '.', 'mcp-server.log'), { flags: 'a' });
+let logStream: fs.WriteStream | null = null;
+let isLogEnabled = true;
+
 function log(...args: any[]) {
+  if (!isLogEnabled) return;
+  if (!logStream) {
+    logStream = fs.createWriteStream(path.join(process.env['USERPROFILE'] || '.', 'mcp-server.log'), { flags: 'a' });
+  }
   const line = `[${new Date().toISOString()}] ${args.map(a => typeof a === 'string' ? a : JSON.stringify(a)).join(' ')}\n`;
   logStream.write(line);
 }
 
-export async function setupMcpServer(mainWindow: BrowserWindow) {
+export interface McpServerOptions {
+  port?: number;
+  disableLog?: boolean;
+}
+
+export async function setupMcpServer(mainWindow: BrowserWindow, options: McpServerOptions = {}) {
+  isLogEnabled = !options.disableLog;
+  const port = options.port || 30555;
   let nextCommandId = 1;
   const pendingCommands = new Map<number, { resolve: (val: any) => void, reject: (err: any) => void }>();
 
@@ -244,7 +257,7 @@ export async function setupMcpServer(mainWindow: BrowserWindow) {
     }
   });
 
-  httpServer.listen(30555, '127.0.0.1', () => {
-    log('GraphBuilder MCP Server listening on http://127.0.0.1:30555/mcp');
+  httpServer.listen(port, '127.0.0.1', () => {
+    log(`GraphBuilder MCP Server listening on http://127.0.0.1:${port}/mcp`);
   });
 }
