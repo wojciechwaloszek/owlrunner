@@ -37,15 +37,17 @@ function anchorClass(node: cytoscape.NodeSingular) {
 // --- LAYOUTS FOR ROOT CLASSES ---
 // --------------------------------------------------------------------------------------------------
 
+export type RootLayout = Record<string, { startX: number, startY: number }>;
+
 // Calculate circular layout for root classes
-export function calculateRootCircularLayout(cy: cytoscape.Core): Record<string, { startX: number, startY: number }> {
+export function calculateRootCircularLayout(cy: cytoscape.Core): RootLayout {
     const MIN_RADIUS = 300;
     const RADIUS_MULTIPLIER = 100;
 
     // Get all root class nodes
     const rootClasses = cy.nodes('.class-node').orphans();
     const numRoots = rootClasses.length;
-    const layout: Record<string, { startX: number, startY: number }> = {};
+    const layout: RootLayout = {};
 
     // Calculate layout for root classes
     if (numRoots > 0) {
@@ -70,7 +72,7 @@ export function calculateRootCircularLayout(cy: cytoscape.Core): Record<string, 
 // --------------------------------------------------------------------------------------------------
 
 // Export function for applying OWL compound layout
-export function applyOWLCompoundLayout(cy: cytoscape.Core, layout?: Record<string, { startX: number, startY: number }>) {
+export function applyOWLCompoundLayout(cy: cytoscape.Core, layout?: RootLayout) {
     // We need to calculate bounds explicitly
 
     // Get all root class nodes
