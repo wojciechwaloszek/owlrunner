@@ -1,6 +1,10 @@
 import cytoscape from 'cytoscape';
 import { b } from 'vite/dist/node/types.d-aGj9QkWt';
 
+// --------------------------------------------------------------------------------------------------
+// --- HELPERS FOR LAYOUT ---
+// --------------------------------------------------------------------------------------------------
+
 // Helper function to get estimated label width
 function getLabelWidth(node: cytoscape.NodeSingular): number {
     const label = node.data('label') || '';
@@ -29,8 +33,44 @@ function anchorClass(node: cytoscape.NodeSingular) {
     }
 }
 
+// --------------------------------------------------------------------------------------------------
+// --- LAYOUTS FOR ROOT CLASSES ---
+// --------------------------------------------------------------------------------------------------
+
+// Calculate circular layout for root classes
+export function calculateRootCircularLayout(cy: cytoscape.Core): Record<string, { startX: number, startY: number }> {
+    const MIN_RADIUS = 300;
+    const RADIUS_MULTIPLIER = 100;
+
+    // Get all root class nodes
+    const rootClasses = cy.nodes('.class-node').orphans();
+    const numRoots = rootClasses.length;
+    const layout: Record<string, { startX: number, startY: number }> = {};
+
+    // Calculate layout for root classes
+    if (numRoots > 0) {
+        const radius = Math.max(MIN_RADIUS, numRoots * RADIUS_MULTIPLIER);
+        const centerX = 0;
+        const centerY = 0;
+        const angleStep = (2 * Math.PI) / numRoots;
+
+        rootClasses.forEach((root, index) => {
+            const angle = index * angleStep;
+            layout[root.id()] = {
+                startX: centerX + radius * Math.cos(angle),
+                startY: centerY + radius * Math.sin(angle)
+            };
+        });
+    }
+    return layout;
+}
+
+// --------------------------------------------------------------------------------------------------
+// --- MAIN OWL LAYOUT FUNCTION ---
+// --------------------------------------------------------------------------------------------------
+
 // Export function for applying OWL compound layout
-export function applyOWLCompoundLayout(cy: cytoscape.Core) {
+export function applyOWLCompoundLayout(cy: cytoscape.Core, layout?: Record<string, { startX: number, startY: number }>) {
     // We need to calculate bounds explicitly
 
     // Get all root class nodes
@@ -144,13 +184,23 @@ export function applyOWLCompoundLayout(cy: cytoscape.Core) {
 
     // Layout all root classes
     rootClasses.forEach(root => {
-        //const dims = layoutClass(root, 0, currentRootY);
-        const dims = layoutClass(root);
+        const id = root.id();
+        let sx: number | undefined;
+        let sy: number | undefined;
+        if (layout && layout[id]) {
+            sx = layout[id].startX;
+            sy = layout[id].startY;
+        }
+        const dims = layoutClass(root, sx, sy);
     });
 
     bendOverlappingEdges(cy);
 
 }
+
+// --------------------------------------------------------------------------------------------------
+// --- OVERLAPPING EDGES ---
+// --------------------------------------------------------------------------------------------------
 
 // the function to bend edges that are overlapping
 function bendOverlappingEdges(cy: cytoscape.Core) {

@@ -1,7 +1,7 @@
 import cytoscape, { NodeCollection, NodeSingular } from 'cytoscape';
 
 import { exportToOWL } from './owl-graph-logic/export-owl';
-import { applyOWLCompoundLayout } from './owl-graph-logic/graph-layout';
+import { applyOWLCompoundLayout, calculateRootCircularLayout } from './owl-graph-logic/graph-layout';
 import { applyDragDropLogic } from './graph-logic/drag-drop';
 import { SaveLoad } from './basic-logic/save-load';
 import { SlotManager } from './components/slot-manager';
@@ -95,13 +95,15 @@ applyOWLCompoundLayout(cy);
 // --- BASIC BUTTONS ---
 // --------------------------------------------------------------------------------------------------
 
-// Layout Buttons
+// Layout Button
 document.getElementById('layout-btn')?.addEventListener('click', () => {
-  applyOWLCompoundLayout(cy);
+  const layout = calculateRootCircularLayout(cy);
+  applyOWLCompoundLayout(cy, layout);
   updateHoverButtons();
   captureGraphState();
 });
 
+// Fit Button
 document.getElementById('fit-btn')?.addEventListener('click', () => {
   cy.fit(cy.elements(), 50); // fit all elements, 50px padding
   updateHoverButtons();
@@ -708,13 +710,15 @@ if (window.mcpAPI) {
     try {
       let result: any = null;
       switch (command) {
+        // prepares a "clean JSON" representation of the graph without anchor nodes, coordinates
+        // and other ui specific elements.
         case 'get_state':
           const cleanJSON: any = { classes: [] };
           const classNodes = cy.nodes('.class-node');
           classNodes.forEach(cls => {
             // Only process root classes (avoid duplicating subclasses at the root level)
             if (cls.isChild()) return;
-            
+
             const classObj: any = {
               id: cls.id(),
               label: cls.data('label') || '',
@@ -731,23 +735,23 @@ if (window.mcpAPI) {
               } else if (child.hasClass('attr-obj')) {
                 const targetEdges = cy.edges(`[source = "${child.id()}"]`);
                 const targetIds = targetEdges.map(e => e.target().id());
-                classObj.objectAttributes.push({ 
-                  id: child.id(), 
-                  label: child.data('label') || '', 
-                  targetClassIds: targetIds 
+                classObj.objectAttributes.push({
+                  id: child.id(),
+                  label: child.data('label') || '',
+                  targetClassIds: targetIds
                 });
               } else if (child.hasClass('attr-col')) {
                 const targetEdges = cy.edges(`[source = "${child.id()}"]`);
                 const targetIds = targetEdges.map(e => e.target().id());
-                classObj.collectiveAttributes.push({ 
-                  id: child.id(), 
-                  label: child.data('label') || '', 
-                  targetClassIds: targetIds 
+                classObj.collectiveAttributes.push({
+                  id: child.id(),
+                  label: child.data('label') || '',
+                  targetClassIds: targetIds
                 });
               } else if (child.hasClass('attr-str')) {
-                classObj.datatypeAttributes.push({ 
-                  id: child.id(), 
-                  label: child.data('label') || '' 
+                classObj.datatypeAttributes.push({
+                  id: child.id(),
+                  label: child.data('label') || ''
                 });
               }
             });
@@ -755,6 +759,8 @@ if (window.mcpAPI) {
           });
           result = cleanJSON;
           break;
+
+        // add a new class to the graph
         case 'add_class':
           nodeCount++;
           const newClassId = `class_${nodeCount}`;
@@ -767,6 +773,8 @@ if (window.mcpAPI) {
           captureGraphState();
           result = { id: newClassId };
           break;
+
+        // add a new subclass to the graph
         case 'add_subclass':
           nodeCount++;
           const newSubId = `sub_${nodeCount}`;
@@ -780,6 +788,8 @@ if (window.mcpAPI) {
           if (activeHoverNodeId === args.parentId) updateHoverButtons();
           result = { id: newSubId };
           break;
+
+        // add a new attribute to the graph
         case 'add_object_attribute':
         case 'add_datatype_attribute':
         case 'add_collective_attribute':
@@ -801,6 +811,8 @@ if (window.mcpAPI) {
           if (activeHoverNodeId === args.parentId) updateHoverButtons();
           result = { id: newAttrId };
           break;
+
+        // create an edge between an attribute and a class to define the attribute type
         case 'set_attribute_type':
           const edgeId = `e_${args.attributeId}_${args.classId}_${Date.now()}`;
           cy.add({
@@ -815,6 +827,8 @@ if (window.mcpAPI) {
           captureGraphState();
           result = { id: edgeId };
           break;
+
+        // delete an element from the graph
         case 'delete_element':
           const elToDel = cy.getElementById(args.elementId);
           if (elToDel && !elToDel.empty()) {
@@ -826,11 +840,15 @@ if (window.mcpAPI) {
             throw new Error(`Element ${args.elementId} not found`);
           }
           break;
+
+        // undo the last action
         case 'undo':
           if (undoBtn.disabled) throw new Error("Nothing to undo");
           undoBtn.click();
           result = { success: true };
           break;
+
+        // redo the last action
         case 'redo':
           if (redoBtn.disabled) throw new Error("Nothing to redo");
           redoBtn.click();
@@ -839,7 +857,7 @@ if (window.mcpAPI) {
         default:
           throw new Error('Unknown command: ' + command);
       }
-      
+
       window.mcpAPI.sendResponse({ commandId, success: true, result });
     } catch (e: any) {
       window.mcpAPI.sendResponse({ commandId, success: false, error: e.message });
