@@ -51,7 +51,7 @@ export async function setupMcpServer(mainWindow: BrowserWindow, options: McpServ
       const commandId = nextCommandId++;
       pendingCommands.set(commandId, { resolve, reject });
       mainWindow.webContents.send('mcp-command', { commandId, command, args });
-      
+
       // Wait up to 10 seconds for layout computations
       setTimeout(() => {
         if (pendingCommands.has(commandId)) {
@@ -98,56 +98,56 @@ export async function setupMcpServer(mainWindow: BrowserWindow, options: McpServ
             },
           },
           {
-            name: 'add_object_attribute',
-            description: 'Add an object attribute (functional/single link) to a class.',
+            name: 'add_functional_object_property',
+            description: 'Add a functional object property to a class.',
             inputSchema: {
               type: 'object',
               properties: {
                 parentId: { type: 'string', description: 'ID of the parent class node' },
-                label: { type: 'string', description: 'Name of the attribute' }
+                label: { type: 'string', description: 'Name of the functional object property' }
               },
               required: ['parentId', 'label'],
             },
           },
           {
-            name: 'add_datatype_attribute',
-            description: 'Add a datatype attribute (string/int) to a class.',
+            name: 'add_data_property',
+            description: 'Add a data property to a class.',
             inputSchema: {
               type: 'object',
               properties: {
                 parentId: { type: 'string', description: 'ID of the parent class node' },
-                label: { type: 'string', description: 'Name of the attribute' }
+                label: { type: 'string', description: 'Name of the property' }
               },
               required: ['parentId', 'label'],
             },
           },
           {
-            name: 'add_collective_attribute',
-            description: 'Add a collective object attribute (list/set) to a class.',
+            name: 'add_general_object_property',
+            description: 'Add a general object property (not functional, multiple values allowed) to a class.',
             inputSchema: {
               type: 'object',
               properties: {
                 parentId: { type: 'string', description: 'ID of the parent class node' },
-                label: { type: 'string', description: 'Name of the attribute' }
+                label: { type: 'string', description: 'Name of the property' }
               },
               required: ['parentId', 'label'],
             },
           },
           {
-            name: 'set_attribute_type',
-            description: 'Set the target type of an object or collective attribute (links the attribute to a target class).',
+            name: 'set_property_type',
+            description: 'Set the target type of an object property (links the property to a target class).',
             inputSchema: {
               type: 'object',
               properties: {
-                attributeId: { type: 'string', description: 'ID of the source attribute node' },
+                propertyId: { type: 'string', description: 'ID of the source property node' },
                 classId: { type: 'string', description: 'ID of the target class node' }
               },
-              required: ['attributeId', 'classId'],
+              required: ['propertyId', 'classId'],
             },
           },
           {
             name: 'delete_element',
-            description: 'Delete a class or attribute node from the graph. Associated edges will also be removed automatically.',
+            description: 'Delete a class or property node from the graph. Associated edges will also be removed automatically.',
             inputSchema: {
               type: 'object',
               properties: {

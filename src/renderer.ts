@@ -715,17 +715,18 @@ if (window.mcpAPI) {
         case 'get_state':
           const cleanJSON: any = { classes: [] };
           const classNodes = cy.nodes('.class-node');
-          classNodes.forEach(cls => {
-            // Only process root classes (avoid duplicating subclasses at the root level)
-            if (cls.isChild()) return;
+          // sort classNodes by the number of ancestors so the root classes go first
+          classNodes.sort((a, b) => a.ancestors().length - b.ancestors().length);
 
+          classNodes.forEach(cls => {
+            // Prepare a template object to fill with the class data and return
             const classObj: any = {
               id: cls.id(),
               label: cls.data('label') || '',
               subclasses: [],
-              objectAttributes: [],
-              datatypeAttributes: [],
-              collectiveAttributes: []
+              functionalObjectProperties: [],
+              dataProperties: [],
+              generalObjectProperties: []
             };
 
             // Map all nested properties and subclasses
@@ -735,7 +736,7 @@ if (window.mcpAPI) {
               } else if (child.hasClass('attr-obj')) {
                 const targetEdges = cy.edges(`[source = "${child.id()}"]`);
                 const targetIds = targetEdges.map(e => e.target().id());
-                classObj.objectAttributes.push({
+                classObj.functionalObjectProperties.push({
                   id: child.id(),
                   label: child.data('label') || '',
                   targetClassIds: targetIds
@@ -743,13 +744,13 @@ if (window.mcpAPI) {
               } else if (child.hasClass('attr-col')) {
                 const targetEdges = cy.edges(`[source = "${child.id()}"]`);
                 const targetIds = targetEdges.map(e => e.target().id());
-                classObj.collectiveAttributes.push({
+                classObj.generalObjectProperties.push({
                   id: child.id(),
                   label: child.data('label') || '',
                   targetClassIds: targetIds
                 });
               } else if (child.hasClass('attr-str')) {
-                classObj.datatypeAttributes.push({
+                classObj.dataProperties.push({
                   id: child.id(),
                   label: child.data('label') || ''
                 });
@@ -790,13 +791,13 @@ if (window.mcpAPI) {
           break;
 
         // add a new attribute to the graph
-        case 'add_object_attribute':
-        case 'add_datatype_attribute':
-        case 'add_collective_attribute':
+        case 'add_functional_object_property':
+        case 'add_data_property':
+        case 'add_general_object_property':
           const typeMap = {
-            'add_object_attribute': { prefix: 'obj_', cls: 'attr-obj' },
-            'add_datatype_attribute': { prefix: 'str_', cls: 'attr-str' },
-            'add_collective_attribute': { prefix: 'col_', cls: 'attr-col' },
+            'add_functional_object_property': { prefix: 'obj_', cls: 'attr-obj' },
+            'add_data_property': { prefix: 'str_', cls: 'attr-str' },
+            'add_general_object_property': { prefix: 'col_', cls: 'attr-col' },
           };
           const t = typeMap[command as keyof typeof typeMap];
           nodeCount++;
@@ -813,13 +814,13 @@ if (window.mcpAPI) {
           break;
 
         // create an edge between an attribute and a class to define the attribute type
-        case 'set_attribute_type':
-          const edgeId = `e_${args.attributeId}_${args.classId}_${Date.now()}`;
+        case 'set_property_type':
+          const edgeId = `e_${args.propertyId}_${args.classId}_${Date.now()}`;
           cy.add({
             group: 'edges',
             data: {
               id: edgeId,
-              source: args.attributeId,
+              source: args.propertyId,
               target: args.classId
             }
           });
