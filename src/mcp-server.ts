@@ -16,7 +16,7 @@ let isLogEnabled = true;
 function log(...args: any[]) {
   if (!isLogEnabled) return;
   if (!logStream) {
-    logStream = fs.createWriteStream(path.join(process.env['USERPROFILE'] || '.', 'mcp-server.log'), { flags: 'a' });
+    logStream = fs.createWriteStream(path.join(process.env['USERPROFILE'] || '.', 'owl-runner-mcp.log'), { flags: 'a' });
   }
   const line = `[${new Date().toISOString()}] ${args.map(a => typeof a === 'string' ? a : JSON.stringify(a)).join(' ')}\n`;
   logStream.write(line);
