@@ -10,29 +10,45 @@ import {
   ListToolsRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
 
+// --------------------------------------------------------------------------------------------------
+// --- MCP LOGGING ---
+// --------------------------------------------------------------------------------------------------
+
+// Log file name and path in user profile directory
+const LOG_FILE_NAME = 'owl-runner-mcp.log';
+const LOG_PATH = path.join(process.env['USERPROFILE'] || '.', LOG_FILE_NAME);
+
 let logStream: fs.WriteStream | null = null;
 let isLogEnabled = true;
 
+// Log messages to file 'owl-runner-mcp.log' in user profile directory
 function log(...args: any[]) {
   if (!isLogEnabled) return;
   if (!logStream) {
-    logStream = fs.createWriteStream(path.join(process.env['USERPROFILE'] || '.', 'owl-runner-mcp.log'), { flags: 'a' });
+    logStream = fs.createWriteStream(LOG_PATH, { flags: 'a' });
   }
   const line = `[${new Date().toISOString()}] ${args.map(a => typeof a === 'string' ? a : JSON.stringify(a)).join(' ')}\n`;
   logStream.write(line);
 }
 
+// --------------------------------------------------------------------------------------------------
+// --- MCP SERVER SETUP ---
+// --------------------------------------------------------------------------------------------------
+
+// MCP server options
 export interface McpServerOptions {
   port?: number;
   disableLog?: boolean;
 }
 
+// Setup MCP server
 export async function setupMcpServer(mainWindow: BrowserWindow, options: McpServerOptions = {}) {
   isLogEnabled = !options.disableLog;
   const port = options.port || 30555;
   let nextCommandId = 1;
   const pendingCommands = new Map<number, { resolve: (val: any) => void, reject: (err: any) => void }>();
 
+  // Handle mcp responses from renderer
   ipcMain.on('mcp-response', (event, data) => {
     const { commandId, success, result, error } = data;
     const p = pendingCommands.get(commandId);
@@ -46,6 +62,7 @@ export async function setupMcpServer(mainWindow: BrowserWindow, options: McpServ
     }
   });
 
+  // Send command to renderer and wait for response
   const sendCommandToRenderer = (command: string, args: any): Promise<any> => {
     return new Promise((resolve, reject) => {
       const commandId = nextCommandId++;
@@ -62,6 +79,7 @@ export async function setupMcpServer(mainWindow: BrowserWindow, options: McpServ
     });
   };
 
+  // Create mcp session
   const createMcpSession = (): StreamableHTTPServerTransport => {
     const server = new Server(
       { name: 'owlrunner-mcp', version: '1.0.0' },
@@ -170,6 +188,7 @@ export async function setupMcpServer(mainWindow: BrowserWindow, options: McpServ
       };
     });
 
+    // Handle mcp tool calls from renderer
     server.setRequestHandler(CallToolRequestSchema, async (request) => {
       try {
         const result = await sendCommandToRenderer(request.params.name, request.params.arguments || {});
@@ -182,6 +201,7 @@ export async function setupMcpServer(mainWindow: BrowserWindow, options: McpServ
       }
     });
 
+    // Create transport
     const transport = new StreamableHTTPServerTransport({
       sessionIdGenerator: () => randomUUID(),
       onsessioninitialized: (sessionId) => {
@@ -199,8 +219,10 @@ export async function setupMcpServer(mainWindow: BrowserWindow, options: McpServ
     return transport;
   };
 
+  // Create sessions
   const sessions = new Map<string, StreamableHTTPServerTransport>();
 
+  // Handle mcp http requests
   const httpServer = http.createServer(async (req, res) => {
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
@@ -257,6 +279,7 @@ export async function setupMcpServer(mainWindow: BrowserWindow, options: McpServ
     }
   });
 
+  // Start server
   httpServer.listen(port, '127.0.0.1', () => {
     log(`GraphBuilder MCP Server listening on http://127.0.0.1:${port}/mcp`);
   });
